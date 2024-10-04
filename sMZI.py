@@ -295,26 +295,27 @@ def square_decomposition(U):
                 x += 1
                 y += 1
 
-    for BS in np.flip(left_T, 0):
-        modes = [int(BS.mode1), int(BS.mode2)]
-        invT = np.eye(N, dtype=np.complex_)
-        invT[modes[0]-1, modes[0]-1] = np.exp(-1j * BS.phi) * np.cos(BS.theta)
-        invT[modes[0]-1, modes[1]-1] = np.exp(-1j * BS.phi) * np.sin(BS.theta)
-        invT[modes[1]-1, modes[0]-1] = -np.sin(BS.theta)
-        invT[modes[1]-1, modes[1]-1] = np.cos(BS.theta)
-        U = np.matmul(invT, U)
-        theta = custom_arctan(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
-        phi   =  custom_angle(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
-        invT[modes[0]-1, modes[0]-1] = np.exp(-1j * phi) * np.cos(theta)
-        invT[modes[0]-1, modes[1]-1] = np.exp(-1j * phi) * np.sin(theta)
-        invT[modes[1]-1, modes[0]-1] = -np.sin(theta)
-        invT[modes[1]-1, modes[1]-1] = np.cos(theta)
-        U = np.matmul(U, invT) 
-        I.BS_list.append(Beamsplitter(modes[0], modes[1], theta, phi))
-    # output (external) phases
-    phases = np.diag(U)
-    I.output_phases = [np.angle(i) for i in phases]
-    return I
+    # for BS in np.flip(left_T, 0):
+    #     modes = [int(BS.mode1), int(BS.mode2)]
+    #     invT = np.eye(N, dtype=np.complex_)
+    #     invT[modes[0]-1, modes[0]-1] = np.exp(-1j * BS.phi) * np.cos(BS.theta)
+    #     invT[modes[0]-1, modes[1]-1] = np.exp(-1j * BS.phi) * np.sin(BS.theta)
+    #     invT[modes[1]-1, modes[0]-1] = -np.sin(BS.theta)
+    #     invT[modes[1]-1, modes[1]-1] = np.cos(BS.theta)
+    #     U = np.matmul(invT, U)
+    #     theta = custom_arctan(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
+    #     phi   =  custom_angle(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
+    #     invT[modes[0]-1, modes[0]-1] = np.exp(-1j * phi) * np.cos(theta)
+    #     invT[modes[0]-1, modes[1]-1] = np.exp(-1j * phi) * np.sin(theta)
+    #     invT[modes[1]-1, modes[0]-1] = -np.sin(theta)
+    #     invT[modes[1]-1, modes[1]-1] = np.cos(theta)
+    #     U = np.matmul(U, invT) 
+    #     I.BS_list.append(Beamsplitter(modes[0], modes[1], theta, phi))
+    # # output (external) phases
+    # phases = np.diag(U)
+    # I.output_phases = [np.angle(i) for i in phases]
+    # return I
+    return V
 
 
 def random_unitary(N: int) -> np.ndarray:
