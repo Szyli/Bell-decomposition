@@ -236,7 +236,6 @@ def square_decomposition(U):
     
     for j in range(1, m-1):
         # odd diags: 1,3,5...
-        # index [0] counts as the first ([1]) diag; therefore, it's odd
         if j%2 != 0: # ii%2
             x = m-1
             y = j-1
@@ -244,24 +243,28 @@ def square_decomposition(U):
             P = external_ps(m, j, V[x,y], V[x,y+1])
             V = np.matmul(V,P)
             
-            modes = [j, j-1]    # initial mode-pairs
-            for k in range(1, j+1): # jj
-                # find delta; it should be the arctan of the difference
-                # of two complex numbers with identical phases
-                # therefore, a real number!
-                delta = custom_arctan(V[x, y], V[x, y+1])
-                M2 = np.eye(m, dtype=np.complex_)
-                M2[modes[0]-1,modes[0]-1] = np.sin(delta)
-                M2[modes[1]-1,modes[0]-1] = np.cos(delta)
-                M2[modes[0]-1,modes[1]-1] = np.cos(delta)
-                M2[modes[1]-1,modes[1]-1] = -np.sin(delta)
-                V = np.matmul(V,M2)
-                # find summa
-                # summ = 
+            for k in range(1, j+1):
+                modes = [y, y+1]    # initial mode-pairs
                 
-                # update mode-pairs
-                modes[0] -= 1
-                modes[1] -= 1
+                delta = custom_arctan(V[x,y+1], V[x,y])
+                
+                if k != j:
+                    # redundant choice (?)
+                    summ = 0
+                else:
+                    # derivation shows
+                    summ = np.angle(V[x-1,y-1]) - np.angle(V[x-1,y]*np.sin(delta) + V[x-1,y+1]*np.cos(delta))
+                
+                M = np.eye(m, dtype=np.complex_)
+                M[modes[0],modes[0]] =  np.sin(delta) * np.exp(1j*summ)
+                M[modes[1],modes[0]] =  np.cos(delta) * np.exp(1j*summ)
+                M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
+                M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
+                V = np.matmul(V,M)
+                
+                # update coordinates
+                x -= 1
+                y -= 1
                 
         # even numbered diagonals (j = 2,4,6...)
         else:
@@ -271,23 +274,26 @@ def square_decomposition(U):
             P = external_ps(m, j, V[x,y], V[x-1,y])
             V = np.matmul(P,V)
         
-            modes = [m-1-j, m-j]
             for k in range(1, j+1): # jj
+                modes = [x-1, x]     # initial mode-pairs
                 
-                delta = custom_arctan(V[x, y], V[x, y+1])
-                M2 = np.eye(m, dtype=np.complex_)
-                M2[modes[0]-1,modes[0]-1] = np.sin(delta)
-                M2[modes[1]-1,modes[0]-1] = np.cos(delta)
-                M2[modes[0]-1,modes[1]-1] = np.cos(delta)
-                M2[modes[1]-1,modes[1]-1] = -np.sin(delta)
-                V = np.matmul(M2,V)
-                # find summa
-                # summ = 
+                delta = custom_arctan(-V[x-1,y], V[x,y])
+                if k == j:
+                    summ = 0
+                else:
+                    # derivation shows
+                    summ = np.angle(V[x+1,y+1]) - np.angle(V[x-1,y+1]*np.cos(delta) - V[x,y+1]*np.sin(delta))
                 
+                M = np.eye(m, dtype=np.complex_)
+                M[modes[0],modes[0]] =  np.sin(delta) * np.exp(1j*summ)
+                M[modes[1],modes[0]] =  np.cos(delta) * np.exp(1j*summ)
+                M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
+                M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
+                V = np.matmul(M,V)
                 
-                # update mode-pairs
-                modes[0] += 1
-                modes[1] += 1
+                # update coordinates
+                x += 1
+                y += 1
 
     for BS in np.flip(left_T, 0):
         modes = [int(BS.mode1), int(BS.mode2)]
@@ -387,10 +393,6 @@ def phase_match(V1: np.complex_, V2: np.complex_):
     
     print('angle1: ', phi1, '\nangle2: ', phi2)
     
-    
-
-
-
 def custom_arctan(V1, V2):
     """
     Computes the ``arctan`` of ``-V1/V2``.
@@ -404,8 +406,8 @@ def custom_arctan(V1, V2):
     else:
         return np.pi/2
 
-# def custom_angle(x1, x2):
-#     if x2 != 0:
-#         return np.angle(x1/x2)
-#     else:
-#         return 0
+def custom_angle(x1, x2):
+    if x2 != 0:
+        return np.angle(x1/x2)
+    else:
+        return 0
