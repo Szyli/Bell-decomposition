@@ -234,7 +234,7 @@ def square_decomposition(U):
     m = U.shape[0]    # dimension of matrix = number of modes 'm'
     V = np.conjugate(U.T)
     
-    for j in range(1, m-1):
+    for j in range(1, m):
         # odd diags: 1,3,5...
         if j%2 != 0: # ii%2
             x = m-1
@@ -248,7 +248,7 @@ def square_decomposition(U):
                 
                 delta = custom_arctan(V[x,y+1], V[x,y])
                 
-                if k != j:
+                if k == j:
                     # redundant choice (?)
                     summ = 0
                 else:
@@ -261,6 +261,8 @@ def square_decomposition(U):
                 M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
                 M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
                 V = np.matmul(V,M)
+                
+                # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
                 
                 # update coordinates
                 x -= 1
@@ -290,6 +292,8 @@ def square_decomposition(U):
                 M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
                 M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
                 V = np.matmul(M,V)
+                
+                # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
                 
                 # update coordinates
                 x += 1
