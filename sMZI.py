@@ -51,7 +51,7 @@ class Beamsplitter:
         self.theta2 = theta2
 
     def __repr__(self):
-        repr = "\n Beam splitter between modes {} and {}: \n Theta angle on {}: {:.2f} \n the angle on {}: {:.2f}".format(
+        repr = "\n MZI between modes {} and {}: \n Theta angle on {}: {:.2f} \n the angle on {}: {:.2f}".format(
             self.mode1,
             self.mode2,
             self.mode1,
@@ -233,14 +233,16 @@ def square_decomposition(U):
     I = Interferometer()
     m = U.shape[0]    # dimension of matrix = number of modes 'm'
     V = np.conjugate(U.T)
-    
+    even = []
+
     for j in range(1, m):
         # odd diags: 1,3,5...
         if j%2 != 0: # ii%2
             x = m-1
             y = j-1
+            s = y+1 #place of the external phase shift P 
             # find external phaseshift that matches given elements' phases
-            P = external_ps(m, j, V[x,y], V[x,y+1])
+            P = external_ps(m, s, V[x,y], V[x,y+1])
             V = np.matmul(V,P)
             
             for k in range(1, j+1):
@@ -262,6 +264,9 @@ def square_decomposition(U):
                 M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
                 V = np.matmul(V,M)
                 
+                theta1, theta2 = internal_phases(delta,summ)
+                
+                I.BS_list.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
                 # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
                 
                 # update coordinates
@@ -272,8 +277,9 @@ def square_decomposition(U):
         else:
             x = m-j
             y = 0
+            s = x-1 #place of the external phase shift P
             
-            P = external_ps(m, j, V[x,y], V[x-1,y])
+            P = external_ps(m, s, V[x,y], V[x-1,y])
             V = np.matmul(P,V)
         
             for k in range(1, j+1): # jj
@@ -293,12 +299,26 @@ def square_decomposition(U):
                 M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
                 V = np.matmul(M,V)
                 
+                #calculate the actual phases theta1 and theta2
+                theta1, theta2 = internal_phases(delta,summ)
+                
+                even.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
+                
                 # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
                 
                 # update coordinates
                 x += 1
                 y += 1
 
+    #add step 3 of the algorithm that implements the external phases in the middle of the cicuit
+    for j in range(2,m+1):
+        #xi = np.angle(V[0][0])-np.angle(V[j-1][j-1])
+        V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
+        
+    #add the even MZIs to the BS list:
+    for BS in np.flip(even, 0):
+        I.BS_list.append(BS)
+    
     # for BS in np.flip(left_T, 0):
     #     modes = [int(BS.mode1), int(BS.mode2)]
     #     invT = np.eye(N, dtype=np.complex_)
@@ -318,8 +338,8 @@ def square_decomposition(U):
     # # output (external) phases
     # phases = np.diag(U)
     # I.output_phases = [np.angle(i) for i in phases]
-    # return I
-    return V
+    return I
+    #return V
 
 
 def random_unitary(N: int) -> np.ndarray:
@@ -416,3 +436,27 @@ def custom_angle(x1, x2):
         return np.angle(x1/x2)
     else:
         return 0
+    
+def internal_phases(delta,summ):
+    """
+    Computes the internal phases theta1 and theta2 
+    
+    ------
+    
+    Parameters
+    ------
+    delta: the angle computed to null the elements
+    summ: the phase computed to equalize the phases
+    
+    Returns
+    ------
+    The interal phases 'theta1' and 'theta2', that reproduce 'delta' and 'summ' according to
+    summ = (theta1+theta2)/2
+    detla = (theta1+theta2)/2
+    
+    """
+    theta1 = delta-summ
+    theta2 = 2*summ-theta1
+    
+    return theta1, theta2
+
