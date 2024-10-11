@@ -338,8 +338,8 @@ def square_decomposition(U):
     # # output (external) phases
     # phases = np.diag(U)
     # I.output_phases = [np.angle(i) for i in phases]
-    return I
-    #return V
+    #return I
+    return V
 
 
 def random_unitary(N: int) -> np.ndarray:
@@ -453,10 +453,10 @@ def internal_phases(delta,summ):
     The interal phases 'theta1' and 'theta2', that reproduce 'delta' and 'summ' according to
     summ = (theta1+theta2)/2
     detla = (theta1+theta2)/2
-    
+    In addition we add a phase pi/2 to each angle to ensure the proper description of the BS
     """
-    theta1 = delta-summ
-    theta2 = 2*summ-theta1
+    theta1 = delta+summ + np.pi/2
+    theta2 = summ-delta + np.pi/2
     
     return theta1, theta2
 
