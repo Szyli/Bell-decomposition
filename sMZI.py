@@ -453,10 +453,10 @@ def internal_phases(delta,summ):
     The interal phases 'theta1' and 'theta2', that reproduce 'delta' and 'summ' according to
     summ = (theta1+theta2)/2
     detla = (theta1+theta2)/2
-    In addition we add a phase pi/2 to each angle to ensure the proper description of the BS
+    In addition we add a phase -pi/2 to each angle to ensure the proper description of the BS
     """
-    theta1 = delta+summ + np.pi/2
-    theta2 = summ-delta + np.pi/2
+    theta1 = delta+summ - np.pi/2
+    theta2 = summ-delta - np.pi/2
     
     return theta1, theta2
 
