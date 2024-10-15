@@ -232,9 +232,12 @@ def square_decomposition(U):
     """
     I = Interferometer()
     m = U.shape[0]    # dimension of matrix = number of modes 'm'
-    V = np.conjugate(U.T)
+    V = np.conjugate(U)
     even = []
-
+    circuit = np.zeros((m,m),dtype=complex) #each entry will define the phase that needs to be put at the corresponding layer a and mode b
+    ext_PS_in = np.zeros((m),dtype=complex) #the external PS P applied to the input
+    ext_PS_out = np.zeros((m),dtype=complex) #the external PS P applied to the output
+    
     for j in range(1, m):
         # odd diags: 1,3,5...
         if j%2 != 0: # ii%2
@@ -243,7 +246,10 @@ def square_decomposition(U):
             s = y+1 #place of the external phase shift P 
             # find external phaseshift that matches given elements' phases
             P = external_ps(m, s, V[x,y], V[x,y+1])
+
+            ext_PS_in[s] = np.angle(V[x,y])-np.angle(V[x,y+1])
             V = np.matmul(V,P)
+           # print(np.angle(V[x,y])-np.angle(V[x,y+1]))
             
             for k in range(1, j+1):
                 modes = [y, y+1]    # initial mode-pairs
@@ -266,6 +272,12 @@ def square_decomposition(U):
                 
                 theta1, theta2 = internal_phases(delta,summ)
                 
+                #save the angles in the matrix circuit to easily read where to put which phase
+                a, b = MZI_layer_coord(m,modes,j,k)
+                circuit[a,b] = theta1
+                circuit[a,b+1] = theta2
+
+                
                 I.BS_list.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
                 # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
                 
@@ -280,8 +292,10 @@ def square_decomposition(U):
             s = x-1 #place of the external phase shift P
             
             P = external_ps(m, s, V[x,y], V[x-1,y])
+
+            ext_PS_out[s] = np.angle(V[x,y])-np.angle(V[x-1,y])
             V = np.matmul(P,V)
-        
+          
             for k in range(1, j+1): # jj
                 modes = [x-1, x]     # initial mode-pairs
                 
@@ -302,6 +316,11 @@ def square_decomposition(U):
                 #calculate the actual phases theta1 and theta2
                 theta1, theta2 = internal_phases(delta,summ)
                 
+                #save the angles in the matrix circuit to easily read where to put which phase
+                a, b = MZI_layer_coord(m,modes,j,k)
+                circuit[a,b] = theta1
+                circuit[a,b+1] = theta2
+                
                 even.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
                 
                 # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
@@ -311,8 +330,33 @@ def square_decomposition(U):
                 y += 1
 
     #add step 3 of the algorithm that implements the external phases in the middle of the cicuit
+    #in addiditon we now want to move the external phases Q to the residual positions
+    
+    #this phase shift on the first mode ensures that we implement the actual unitary U, without global phase, 
+    #however, for now we don't use it
+    #V = np.dot(V,external_ps(m, 0, 0, V[0,0]))
+    
     for j in range(2,m+1):
         #xi = np.angle(V[0][0])-np.angle(V[j-1][j-1])
+        a = m - j
+        #print(j,a)
+        xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
+   
+        if j%2 != 0:
+            #if j is odd        
+            for b in range(j-1,m):
+                circuit[a,b] = circuit[a,b] + xi
+            for b in range(j,m):
+                circuit[a-1,b] = circuit[a-1,b] - xi
+                
+        else: #if j is even
+            
+            for b in range(j):
+                circuit[a-1,b] = circuit[a-1,b] + xi
+            for b in range(j-1):
+                circuit[a,b] = circuit[a,b] - xi
+            
+                
         V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
         
     #add the even MZIs to the BS list:
@@ -338,8 +382,10 @@ def square_decomposition(U):
     # # output (external) phases
     # phases = np.diag(U)
     # I.output_phases = [np.angle(i) for i in phases]
+    return ext_PS_in, circuit.T, ext_PS_out
     #return I
-    return V
+    
+    #return V
 
 
 def random_unitary(N: int) -> np.ndarray:
@@ -452,11 +498,41 @@ def internal_phases(delta,summ):
     ------
     The interal phases 'theta1' and 'theta2', that reproduce 'delta' and 'summ' according to
     summ = (theta1+theta2)/2
-    detla = (theta1+theta2)/2
+    detla = (theta1-theta2)/2
     In addition we add a phase -pi/2 to each angle to ensure the proper description of the BS
     """
-    theta1 = delta+summ - np.pi/2
-    theta2 = summ-delta - np.pi/2
+    theta1 = delta + summ - np.pi/2
+    theta2 = summ - delta - np.pi/2
     
     return theta1, theta2
 
+def MZI_layer_coord(m,modes,j,k):
+    """
+    Gives new coordinates that define in which vertical layer of the circuit 
+    the corresponding MZI is placed
+    
+    ------
+    
+    Parameters
+    ------
+    m: the number of modes
+    modes: the modes the MZI is acting on
+    j: the coordinate giving the diagonal of the circuit
+    k: the counter within the diagonal j
+    
+    Returns
+    ------
+    New coordinates a and b (starting at 0) that will help to place the MZI in the circiut 
+    and manage the shifting of the external PS Q from the middle of the circuit to the residual positions
+    NOTE: So Far only done for odd number of modes
+    """
+    
+    if m%2 != 0: #if m is odd
+        if j%2 == 0 :
+            a = m - k
+        else:
+            a = k - 1
+        b = modes[0]
+        
+        return a, b
+    else: print('Even m not implemented yet')
