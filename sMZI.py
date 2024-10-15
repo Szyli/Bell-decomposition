@@ -336,28 +336,51 @@ def square_decomposition(U):
     #however, for now we don't use it
     #V = np.dot(V,external_ps(m, 0, 0, V[0,0]))
     
-    for j in range(2,m+1):
-        #xi = np.angle(V[0][0])-np.angle(V[j-1][j-1])
-        a = m - j
-        #print(j,a)
-        xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
+    if m%2 != 0: #if the number of modes is odd
+        for j in range(2,m+1):
+            #xi = np.angle(V[0][0])-np.angle(V[j-1][j-1])
+            a = m - j
+            #print(j,a)
+            xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
    
-        if j%2 != 0:
-            #if j is odd        
-            for b in range(j-1,m):
-                circuit[a,b] = circuit[a,b] + xi
-            for b in range(j,m):
-                circuit[a-1,b] = circuit[a-1,b] - xi
+            if j%2 != 0:
+                #if j is odd        
+                for b in range(j-1,m):
+                    circuit[a,b] = circuit[a,b] + xi
+                for b in range(j,m):
+                    circuit[a-1,b] = circuit[a-1,b] - xi
                 
-        else: #if j is even
-            
-            for b in range(j):
-                circuit[a-1,b] = circuit[a-1,b] + xi
-            for b in range(j-1):
-                circuit[a,b] = circuit[a,b] - xi
+            else: #if j is even           
+                for b in range(j):
+                    circuit[a-1,b] = circuit[a-1,b] + xi
+                for b in range(j-1):
+                    circuit[a,b] = circuit[a,b] - xi
             
                 
-        V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
+            V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
+            
+    else: #for even m
+        for j in range(2,m+1):
+            a = m - j
+            xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
+   
+            if j%2 != 0:
+                #if j is odd        
+                for b in range(j):
+                    circuit[a,b] = circuit[a,b] + xi
+                for b in range(j-1):
+                    circuit[a+1,b] = circuit[a+1,b] - xi
+                    
+            else: #if j is even           
+                for b in range(j-1,m):
+                    circuit[a+1,b] = circuit[a+1,b] + xi
+                for b in range(j,m):
+                    circuit[a,b] = circuit[a,b] - xi
+            
+                
+            V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
+                    
+                
         
     #add the even MZIs to the BS list:
     for BS in np.flip(even, 0):
@@ -524,15 +547,16 @@ def MZI_layer_coord(m,modes,j,k):
     ------
     New coordinates a and b (starting at 0) that will help to place the MZI in the circiut 
     and manage the shifting of the external PS Q from the middle of the circuit to the residual positions
-    NOTE: So Far only done for odd number of modes
+    a: the coordinate of the MZI layer
+    b: the affected mode
     """
     
-    if m%2 != 0: #if m is odd
-        if j%2 == 0 :
-            a = m - k
-        else:
-            a = k - 1
-        b = modes[0]
+    if j%2 == 0 :
+        a = m - k
+    else:
+        a = k - 1
+    b = modes[0]
         
-        return a, b
-    else: print('Even m not implemented yet')
+    return a, b
+
+        
