@@ -13,7 +13,32 @@
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
+
+class Externalphaseshifter:
+    """
+    This class defines the external phaseshifters (PS) applied
+    before the first beamsplitters in each diagonals.
+    May be used for the final layer of external PS:s
+    positioned in the "middle" of the circuit.
+    
+    ---
+    
+    Args:
+        mode (int): the index of the mode on which the PS is located
+        phi (float): the angle of the PS
+    """
+    def __init__(self, mode, phi):
+        self.mode = mode
+        self.phi = phi
+
+    def __repr__(self):
+        repr = "\n External PS on mode {} with angle \t phi: {:.2f}".format(
+            self.mode,
+            self.phi,
+            )
+        return repr
 
 class Beamsplitter:
     """
@@ -61,158 +86,275 @@ class Beamsplitter:
             )
         return repr
 
-
 class Interferometer:
     """
     This class defines an interferometer.
     
     ---
 
-    An interferometer contains an ordered list of variable beam splitters,
-    represented here by ``BS_list``. For ``BS`` in ``BS_list``, ``BS[0]``
-    and ``BS[1]`` correspond to the labels of the two modes being interfered (which start at 1).
-    
-    This transformation is parametrized by ``BS[2]`` (theta1) and by ``BS[3]`` (theta2)
-    which determines the beam splitter reflectivity.
-    The interferometer also contains a list of input phases in ``initial_phases``
-    that is the only external phaseshifter that is not located at the output.
-    Output phases are described by ``output_phases``.
+    An interferometer contains parameters of the whole circuit; such as
+    > - The number of modes (``num_of_modes``)
+    > - The input phases (``input_phases``)
+    > - The Output phases (``output_phases``)
+    > - The circuit (``circuit``)
     
     ---
     
     Args:
-        BS_list (list): of beamsplitters; elements are of ``Beamsplitter`` class type
-        initial_phases (list): of phaseshifts at the beginning of the diagonals
-        output_phases (list): of phaseshifts put at the output of the circuit to complete it
+        num_of_modes (int): total number of modes
+        input_phases (array): the external PS P applied to the input
+        output_phases (array): the external PS P applied to the output
+        circuit (matrix): each entry will define the phase that needs to be put at the corresponding layer a and mode b
+        
     """
 
-    def __init__(self):
-        self.BS_list = []
-        self.initial_phases = []
-        self.output_phases = []
+    def __init__(self, num_of_modes):
+        self.num_of_modes = num_of_modes
+        self.input_phases = np.zeros(shape=(num_of_modes), dtype=complex)
+        self.output_phases = np.zeros(shape=(num_of_modes), dtype=complex)
+        self.circuit = np.zeros(shape=(num_of_modes,num_of_modes), dtype=complex)
 
-    def add_BS(self, BS):
-        """Adds a beam splitter at the output of the current interferometer
-
-        Args:
-            BS (Beamsplitter): a Beamsplitter instance
-        """
-        self.BS_list.append(BS)
-
-    def add_phase(self, mode, phase):    
-        """Use this to manually add a phase shift to a selected mode at the output of the interferometer
-        
-        Args:
-            mode (int): the mode index. The first mode is mode 1
-            phase (float): the real-valued phase to add
-        """
-        while mode > np.size(self.output_phases):
-            self.output_phases.append(0)
-        self.output_phases[mode-1] = phase
-
-    def count_modes(self) -> int:
-        """
-        Calculate number of modes involved in the transformation. 
-        
-        ---
-        
-        This is required for the functions ``calculate_transformation`` and ``draw``.
-        
-        ---
-
-        Returns:
-            the number of modes in the transformation
-        """
-        highest_index = max([max([BS.mode1, BS.mode2]) for BS in self.BS_list])
-        return highest_index
-
-    def calculate_transformation(self) -> np.ndarray:
-        """
-        Calculate unitary matrix describing the transformation implemented by the interferometer.
-        Used to verify the implementation.
+    # def calculate_transformation(self) -> np.ndarray:
+    #     """
+    #     Calculate unitary matrix describing the transformation implemented by the interferometer.
+    #     Used to verify the implementation.
     
-        Returns:
-            complex-valued 2D numpy array representing the interferometer
+    #     Returns:
+    #         complex-valued 2D numpy array representing the interferometer
+    #     """
+    #     N = self.num_of_modes
+    #     U = np.eye(N, dtype=np.complex_)
+
+    #     for BS in self.BS_list:
+    #         T = np.eye(N, dtype=np.complex_)
+    #         T[BS.mode1 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.cos(BS.theta)
+    #         T[BS.mode1 - 1, BS.mode2 - 1] = -np.sin(BS.theta)
+    #         T[BS.mode2 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.sin(BS.theta)
+    #         T[BS.mode2 - 1, BS.mode2 - 1] = np.cos(BS.theta)
+    #         U = np.matmul(T,U)
+
+    #     while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
+    #         self.output_phases.append(0)
+
+    #     D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
+    #     U = np.matmul(D,U)
+    #     return U
+
+    def curve(self, x1: float, x2: float,
+            mode: bool, flip: bool = False,
+            res: int = 10, scale: float = 0.5,
+            c: float = 0):
         """
-        N = int(self.count_modes())
-        U = np.eye(N, dtype=np.complex_)
+        
+        Args
+        ------
+        mode : True gives `cos`; False gives `sin`
+        flip : determines if curve needs to be mirrored around the x-axes
+        res : resolution
+        scale : relative height of curve
+            to set return values corresponding to the environment
+        c : shift in `y` direction
+        """
+        x = np.linspace(0, np.pi/2, res)
+        if flip:
+            sign = -1
+        else:
+            sign = 1
+        if mode:
+            y = np.cos(x) * sign * scale + c
+        else:
+            y = np.sin(x) * sign * scale + c
+        
+        x = np.linspace(x1, x2, res)
+        
+        return (x,y)
+    
+    def draw_curved_connectors(self, ord, x_start, x_end, corr):
+        """
+        Function that puts the curved waveguids down (it's just a drawing).
+        
+        Args
+        ------
+        ord : which pair of curved wgs to draw
+            ``if True``: first, ``if False``: second
+        x_start : position of first point in `x`
+        x_end : position of last point in `x`
+        corr : correction in `y` direction
+        """
+        
+        if ord:
+            c1, c2 = self.curve(x_start, x_end, mode=True, flip=False, c=corr)
+            # line connecting UP to MID
+            plt.plot(c1, c2, lw=1, color="blue")
+            
+            # line connecting BOT to MID
+            c1, c2 = self.curve(x_start, x_end, mode=True, flip=True, c=corr)
+            plt.plot(c1, c2, lw=1, color="blue")
+        else:
+            # line connecting MID to UP
+            c1, c2 = self.curve(x_start, x_end, mode=False, flip=False, c=corr)
+            plt.plot(c1, c2, lw=1, color="blue")
+            
+            # line connecting MID to BOT
+            c1, c2 = self.curve(x_start, x_end, mode=False, flip=True, c=corr)
+            plt.plot(c1, c2, lw=1, color="blue")
+        
+    def draw_external_ps(self, x: int, N: int, ext_ps: Externalphaseshifter, used: bool, even: bool, cl: str = "red"):
+        """
+        Function to handle the external phasshifters on the drawing.
+        
+        Args
+        ------
+        x (int): current position in x
+        N (int): total number of modes
+        ext_ps (Externalphaseshifter): the external PS (class type)
+        used (bool): whether the selected external PS has been used or not
+        even (bool): whether we're on even or odd diagonal
+        cl (str): color of text
+        """
+        
+        if not used:
+            used = True
+            if not even:
+                # placeholder for the mode on which there are no external phaseshifts (UPPER)
+                plt.plot((x, x+0.3), (N - ext_ps.mode + 1, N - ext_ps.mode + 1), lw=1, color="blue")
+                plt.plot((x,x+0.3), (N - ext_ps.mode, N - ext_ps.mode), lw=1, color="blue")
+                
+                # EXTERNAL PS (on LOWER mode)
+                plt.plot((x+0.15, x+0.15), (N-ext_ps.mode-0.3, N-ext_ps.mode+0.2), lw=1, color="blue")
+                circle = plt.Circle((x+0.15, N-ext_ps.mode), 0.1, fill=False)
+                plt.gca().add_patch(circle)
+                phase = "{:2f}".format(ext_ps.phi)
+                if ext_ps.phi > 0:
+                    plt.text(x+0.2, N-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
+                else:
+                    plt.text(x+0.2, N-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
+            else:
+                # placeholder for the mode on which there are no external phaseshifts (LOWER)
+                plt.plot((x+1.55, x+1.7), (N - ext_ps.mode - 1, N - ext_ps.mode - 1), lw=1, color="blue")
 
-        for BS in self.BS_list:
-            T = np.eye(N, dtype=np.complex_)
-            T[BS.mode1 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.cos(BS.theta)
-            T[BS.mode1 - 1, BS.mode2 - 1] = -np.sin(BS.theta)
-            T[BS.mode2 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.sin(BS.theta)
-            T[BS.mode2 - 1, BS.mode2 - 1] = np.cos(BS.theta)
-            U = np.matmul(T,U)
-
-        while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
-            self.output_phases.append(0)
-
-        D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
-        U = np.matmul(D,U)
-        return U
-
-    def draw(self, show_plot=True):  
-        """Use matplotlib to make a drawing of the interferometer
+                # EXTERNAL PS (on UPPER mode)
+                plt.plot((x+1.55, x+1.55), (N-ext_ps.mode-0.2, N-ext_ps.mode+0.3), lw=1, color="blue")
+                circle = plt.Circle((x+1.55, N-ext_ps.mode), 0.1, fill=False)
+                plt.gca().add_patch(circle)
+                phase = "{:2f}".format(ext_ps.phi)
+                if ext_ps.phi > 0:
+                    plt.text(x+1.6, N-ext_ps.mode+0.3, phase[0:3], color=cl, fontsize=7)
+                else:
+                    plt.text(x+1.6, N-ext_ps.mode+0.3, phase[0:4], color=cl, fontsize=7)                
+    
+        return used
+    
+    def draw(self, size = None, show_plot=True):  
+        """
+        Function to make a drawing of the interferometer.
 
         Args:
+            size (tuple): x and y dimension of plot
             show_plot (bool): whether to show the generated plot
         """
 
-        import matplotlib.pyplot as plt
-        plt.figure()
-        N = self.count_modes()
+        # TO BE INTERCHANGED FOR THE NEW CIRCUIT IMPLEMENTATION
+        
+        N = self.num_of_modes
         mode_tracker = np.zeros(N)
+        sc = 0.5
+        num_even_elems = N*(N-1)/4 + int(N/2) # in the first half
 
-        for ii in range(N):
-            plt.plot((-1, 0), (ii, ii), lw=1, color="blue")
+        if size == None:
+            size = (N*2+4,N*2)
+            plt.figure(figsize=size)
+        else:
+            plt.figure(figsize=size)
 
-        for BS in self.BS_list:
-            x = np.max([mode_tracker[BS.mode1 - 1], mode_tracker[BS.mode2 - 1]])
-            plt.plot((x+0.3, x+1), (N - BS.mode1, N - BS.mode2), lw=1, color="blue")
-            plt.plot((x, x+0.3), (N - BS.mode1, N - BS.mode1), lw=1, color="blue")
-            plt.plot((x, x+0.3), (N - BS.mode2, N - BS.mode2), lw=1, color="blue")
-            plt.plot((x+0.3, x+1), (N - BS.mode2, N - BS.mode1), lw=1, color="blue")
-            plt.plot((x+0.4, x+0.9), (N - (BS.mode2 + BS.mode1)/2, N - (BS.mode2 + BS.mode1)/2), lw=1, color="blue")
-            reflectivity = "{:2f}".format(np.cos(BS.theta)**2)
-            plt.text(x+0.9, N + 0.05 - (BS.mode2 + BS.mode1)/2, reflectivity[0:3], color="green", fontsize=7)
+        # initial/starting lines
+        for i in range(1,N+1,1):
+            plt.plot((-1, 0), (i, i), lw=1, color="blue")
 
-            plt.plot((x+0.15, x+0.15), (N+0.3-(BS.mode2 + BS.mode1)/2., N+0.7-(BS.mode2 + BS.mode1)/2.), lw=1, color="blue")
-            circle = plt.Circle((x+0.15, N+0.5-(BS.mode2 + BS.mode1)/2.), 0.1, fill=False)
-            plt.gca().add_patch(circle)
-            phase = "{:2f}".format(BS.phi)
-            if BS.phi > 0:
-                plt.text(x+0.2, N+0.7-(BS.mode2 + BS.mode1)/2., phase[0:3], color="red", fontsize=7)
+        # external and MZIs without outputs
+        # num_of_zmi = self.num_of_modes * N/2 + int(self.num_of_modes/2)
+        used = True
+        even = False    # we start with odd diags
+        for idx in range(len(self.BS_list)):
+            
+            elem = self.BS_list[idx]
+            
+            if idx == num_even_elems -1:
+                # output phases
+                for ps in self.output_phases:
+                    used = False
+                    x = mode_tracker[ps.mode]
+                    used = self.draw_external_ps(x, N, ps, used, even, 'brown')
+                    plt.plot((x+0.25, x+0.85), (N-ps.mode, N-ps.mode), lw=1, color="blue")
+                    # update
+                    mode_tracker[ps.mode] = x+0.6
+                # switched diagonals
+                even = True
+            # type check:
+            if isinstance(elem, Externalphaseshifter):
+                # store the external phaseshift for the next use
+                ext_ps = elem
+                used = False
+                if even:
+                    used = self.draw_external_ps(x, N, ext_ps, used, even)
+            # "beamsplitters"
             else:
-                plt.text(x+0.2, N+0.7-(BS.mode2 + BS.mode1)/2., phase[0:4], color="red", fontsize=7)
-            if x > mode_tracker[BS.mode1-1]:
-                plt.plot((mode_tracker[BS.mode1-1], x), (N-BS.mode1, N-BS.mode1), lw=1, color="blue")
-            if x > mode_tracker[BS.mode2-1]:
-                plt.plot((mode_tracker[BS.mode2-1], x), (N-BS.mode2, N-BS.mode2), lw=1, color="blue")
-            mode_tracker[BS.mode1-1] = x+1
-            mode_tracker[BS.mode2-1] = x+1
+                x = np.max([mode_tracker[elem.mode1], mode_tracker[elem.mode2]])
+                
+                if used:
+                    # no external PS to be placed; placeholders
+                    plt.plot((x, x+0.3), (N - elem.mode1, N - elem.mode1), lw=1, color="blue")
+                    plt.plot((x, x+0.3), (N - elem.mode2, N - elem.mode2), lw=1, color="blue")
+                
+                # EXTERNAL PS
+                used = self.draw_external_ps(x, N, ext_ps, used, even)
+                
+                # creating curved lines
+                self.draw_curved_connectors(ord=True, x_start=x+0.3, x_end=x+0.5,corr=N-elem.mode1-sc)
+                self.draw_curved_connectors(ord=False, x_start=x+0.5, x_end=x+0.7,corr=N-elem.mode1-sc)
+                
+                # INTERNAL PS: theta1
+                plt.plot((x+0.85, x+0.85), (N+0.3-(elem.mode2 + elem.mode1)/2., N+0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, N+0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
+                plt.gca().add_patch(circle)
+                inter_phase = "{:2f}".format(elem.theta1)
+                plt.text(x+0.9, N+0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
+                
+                # INTERNAL PS: theta2
+                plt.plot((x+0.85, x+0.85), (N-0.3-(elem.mode2 + elem.mode1)/2., N-0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, N-0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
+                plt.gca().add_patch(circle)
+                inter_phase = "{:2f}".format(elem.theta2)
+                plt.text(x+0.9, N-0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
+                
+                # creating curved lines
+                self.draw_curved_connectors(ord=True, x_start=x+1, x_end=x+1.2,corr=N-elem.mode1-sc)
+                self.draw_curved_connectors(ord=False, x_start=x+1.2, x_end=x+1.4,corr=N-elem.mode1-sc)
 
+                # connecting neighbouring cells
+                plt.plot((x+1.4, x+2), (N-elem.mode1, N-elem.mode1), lw=1, color="blue")
+                plt.plot((x+1.4, x+2), (N-elem.mode2, N-elem.mode2), lw=1, color="blue")
+                
+                # update
+                if x > mode_tracker[elem.mode1]:
+                    plt.plot((mode_tracker[elem.mode1], x), (N-elem.mode1, N-elem.mode1), lw=1, color="blue")
+                if x > mode_tracker[elem.mode2]:
+                    plt.plot((mode_tracker[elem.mode2], x), (N-elem.mode2, N-elem.mode2), lw=1, color="blue")
+                mode_tracker[elem.mode1] = x+2
+                mode_tracker[elem.mode2] = x+2
+
+        # Output external PS
         max_x = np.max(mode_tracker)
         for ii in range(N):
-            plt.plot((mode_tracker[ii], max_x+1), (N-ii-1, N-ii-1), lw=1, color="blue")
-            while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
-                self.output_phases.append(0)
-            if self.output_phases[ii] != 0:
-                plt.plot((max_x+0.5, max_x+0.5), (N-ii-1.2, N-ii-0.8), lw=1, color="blue")
-                circle = plt.Circle((max_x+0.5, N-ii-1), 0.1, fill=False)
-                plt.gca().add_patch(circle)
-                phase = str(self.output_phases[ii])
-                if BS.phi > 0:
-                    plt.text(max_x+0.6, N-ii-0.8, phase[0:3], color="red", fontsize=7)
-                else:
-                    plt.text(max_x+0.6, N-ii-0.8, phase[0:4], color="red", fontsize=7)
+            plt.plot((mode_tracker[ii], max_x+1), (N-ii, N-ii), lw=1, color="blue")
 
-
-        plt.text(max_x/2, -0.7, "green: BS reflectivity", color="green", fontsize=10)
-        plt.text(max_x/2, -1.4, "red: phase shift", color="red", fontsize=10)
-        plt.text(-1, N-0.3, "Light in", fontsize=10)
-        plt.text(max_x+0.5, N-0.3, "Light out", fontsize=10)
-        plt.gca().axes.set_ylim([-1.8, N+0.2])
+        plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
+        plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
+        plt.text(max_x/3, N+1-0.5, r"brown: output phase shifts ($\Phi$)", color="brown", fontsize=10)
+        # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
+        plt.text(-1, N+0.2, "Light in", fontsize=10)
+        plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
+        plt.gca().axes.set_ylim([0.5, N+1.2])
         plt.axis("off")
         if show_plot:
             plt.show()
@@ -230,37 +372,30 @@ def square_decomposition(U):
     Returns:
         an Interferometer instance
     """
-    I = Interferometer()
     m = U.shape[0]    # dimension of matrix = number of modes 'm'
+    I = Interferometer(num_of_modes=m)
     V = np.conjugate(U)
-    even = []
-    circuit = np.zeros((m,m),dtype=complex) #each entry will define the phase that needs to be put at the corresponding layer a and mode b
-    ext_PS_in = np.zeros((m),dtype=complex) #the external PS P applied to the input
-    ext_PS_out = np.zeros((m),dtype=complex) #the external PS P applied to the output
     
-    for j in range(1, m):
-        # odd diags: 1,3,5...
-        if j%2 != 0: # ii%2
+    for j in range(1, m): # odd diags: 1,3,5...
+        if j%2 != 0:
             x = m-1
             y = j-1
             s = y+1 #place of the external phase shift P 
             # find external phaseshift that matches given elements' phases
-            P = external_ps(m, s, V[x,y], V[x,y+1])
+            P, phi = external_ps(m, s, V[x,y], V[x,y+1])
 
-            ext_PS_in[s] = np.angle(V[x,y])-np.angle(V[x,y+1])
             V = np.matmul(V,P)
-           # print(np.angle(V[x,y])-np.angle(V[x,y+1]))
+            
+            I.input_phases[s] = phi
             
             for k in range(1, j+1):
                 modes = [y, y+1]    # initial mode-pairs
                 
                 delta = custom_arctan(V[x,y+1], V[x,y])
                 
-                if k == j:
-                    # redundant choice (?)
+                if k == j:  # redundant choice
                     summ = 0
-                else:
-                    # derivation shows
+                else:   # derivation shows
                     summ = np.angle(V[x-1,y-1]) - np.angle(V[x-1,y]*np.sin(delta) + V[x-1,y+1]*np.cos(delta))
                 
                 M = np.eye(m, dtype=np.complex_)
@@ -274,36 +409,31 @@ def square_decomposition(U):
                 
                 #save the angles in the matrix circuit to easily read where to put which phase
                 a, b = MZI_layer_coord(m,modes,j,k)
-                circuit[a,b] = theta1
-                circuit[a,b+1] = theta2
-
-                
-                I.BS_list.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
-                # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
+                I.circuit[a,b] = theta1
+                I.circuit[a,b+1] = theta2
                 
                 # update coordinates
                 x -= 1
                 y -= 1
                 
-        # even numbered diagonals (j = 2,4,6...)
-        else:
+        else:   # even numbered diagonals (j = 2,4,6...)
             x = m-j
             y = 0
             s = x-1 #place of the external phase shift P
             
-            P = external_ps(m, s, V[x,y], V[x-1,y])
+            P, phi = external_ps(m, s, V[x,y], V[x-1,y])
 
-            ext_PS_out[s] = np.angle(V[x,y])-np.angle(V[x-1,y])
             V = np.matmul(P,V)
+            
+            I.output_phases[s] = phi
           
-            for k in range(1, j+1): # jj
+            for k in range(1, j+1):
                 modes = [x-1, x]     # initial mode-pairs
                 
                 delta = custom_arctan(-V[x-1,y], V[x,y])
                 if k == j:
                     summ = 0
                 else:
-                    # derivation shows
                     summ = np.angle(V[x+1,y+1]) - np.angle(V[x-1,y+1]*np.cos(delta) - V[x,y+1]*np.sin(delta))
                 
                 M = np.eye(m, dtype=np.complex_)
@@ -318,12 +448,8 @@ def square_decomposition(U):
                 
                 #save the angles in the matrix circuit to easily read where to put which phase
                 a, b = MZI_layer_coord(m,modes,j,k)
-                circuit[a,b] = theta1
-                circuit[a,b+1] = theta2
-                
-                even.append(Beamsplitter(modes[0], modes[1], theta1, theta2))
-                
-                # print("j,k: {:.2f},{:.2f}\nnulled: {:.2f}".format(j,k,V[x,y]))
+                I.circuit[a,b] = theta1
+                I.circuit[a,b+1] = theta2
                 
                 # update coordinates
                 x += 1
@@ -338,77 +464,47 @@ def square_decomposition(U):
     
     if m%2 != 0: #if the number of modes is odd
         for j in range(2,m+1):
-            #xi = np.angle(V[0][0])-np.angle(V[j-1][j-1])
             a = m - j
-            #print(j,a)
             xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
    
-            if j%2 != 0:
-                #if j is odd        
+            if j%2 != 0: #if j is odd        
                 for b in range(j-1,m):
-                    circuit[a,b] = circuit[a,b] + xi
+                    I.circuit[a,b] = I.circuit[a,b] + xi
                 for b in range(j,m):
-                    circuit[a-1,b] = circuit[a-1,b] - xi
+                    I.circuit[a-1,b] = I.circuit[a-1,b] - xi
                 
             else: #if j is even           
                 for b in range(j):
-                    circuit[a-1,b] = circuit[a-1,b] + xi
+                    I.circuit[a-1,b] = I.circuit[a-1,b] + xi
                 for b in range(j-1):
-                    circuit[a,b] = circuit[a,b] - xi
+                    I.circuit[a,b] = I.circuit[a,b] - xi
             
-                
-            V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
+            P , _ = external_ps(m, j-1, V[0,0], V[j-1,j-1])
+            V = np.dot(V,P)
             
     else: #for even m
         for j in range(2,m+1):
             a = m - j
             xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
    
-            if j%2 != 0:
-                #if j is odd        
+            if j%2 != 0: #if j is odd        
                 for b in range(j):
-                    circuit[a,b] = circuit[a,b] + xi
+                    I.circuit[a,b] = I.circuit[a,b] + xi
                 for b in range(j-1):
-                    circuit[a+1,b] = circuit[a+1,b] - xi
+                    I.circuit[a+1,b] = I.circuit[a+1,b] - xi
                     
             else: #if j is even           
                 for b in range(j-1,m):
-                    circuit[a+1,b] = circuit[a+1,b] + xi
+                    I.circuit[a+1,b] = I.circuit[a+1,b] + xi
                 for b in range(j,m):
-                    circuit[a,b] = circuit[a,b] - xi
+                    I.circuit[a,b] = I.circuit[a,b] - xi
             
-                
-            V = np.dot(V,external_ps(m, j-1, V[0,0], V[j-1,j-1]))
-                    
-                
-        
-    #add the even MZIs to the BS list:
-    for BS in np.flip(even, 0):
-        I.BS_list.append(BS)
+            P , _ = external_ps(m, j-1, V[0,0], V[j-1,j-1])
+            V = np.dot(V,P)
+
+    I.circuit = I.circuit.T
     
-    # for BS in np.flip(left_T, 0):
-    #     modes = [int(BS.mode1), int(BS.mode2)]
-    #     invT = np.eye(N, dtype=np.complex_)
-    #     invT[modes[0]-1, modes[0]-1] = np.exp(-1j * BS.phi) * np.cos(BS.theta)
-    #     invT[modes[0]-1, modes[1]-1] = np.exp(-1j * BS.phi) * np.sin(BS.theta)
-    #     invT[modes[1]-1, modes[0]-1] = -np.sin(BS.theta)
-    #     invT[modes[1]-1, modes[1]-1] = np.cos(BS.theta)
-    #     U = np.matmul(invT, U)
-    #     theta = custom_arctan(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
-    #     phi   =  custom_angle(U[modes[1]-1, modes[0]-1], U[modes[1]-1, modes[1]-1])
-    #     invT[modes[0]-1, modes[0]-1] = np.exp(-1j * phi) * np.cos(theta)
-    #     invT[modes[0]-1, modes[1]-1] = np.exp(-1j * phi) * np.sin(theta)
-    #     invT[modes[1]-1, modes[0]-1] = -np.sin(theta)
-    #     invT[modes[1]-1, modes[1]-1] = np.cos(theta)
-    #     U = np.matmul(U, invT) 
-    #     I.BS_list.append(Beamsplitter(modes[0], modes[1], theta, phi))
-    # # output (external) phases
-    # phases = np.diag(U)
-    # I.output_phases = [np.angle(i) for i in phases]
-    return ext_PS_in, circuit.T, ext_PS_out
-    #return I
-    
-    #return V
+    return I
 
 
 def random_unitary(N: int) -> np.ndarray:
@@ -435,7 +531,7 @@ def random_unitary(N: int) -> np.ndarray:
 
     return U
 
-def external_ps(N: int, j: int, V1: np.complex_, V2: np.complex_) -> np.ndarray:
+def external_ps(N: int, mode: int, V1: np.complex_, V2: np.complex_) -> tuple[np.ndarray, float]:
     """
     Builds the external phase-shifter for the given diagonal.
     Purpose of this operator is to match the given elements'
@@ -444,7 +540,7 @@ def external_ps(N: int, j: int, V1: np.complex_, V2: np.complex_) -> np.ndarray:
     Parameters
     ------
     N : dimension of unitary matrix / number of modes
-    j : selected "diagonal"
+    mode : selected "diagonal" / index of mode
     V1 : element of auxillary matrix
     V2 : subsequent element of **V1**
     
@@ -459,13 +555,13 @@ def external_ps(N: int, j: int, V1: np.complex_, V2: np.complex_) -> np.ndarray:
     Returns
     ------
     Diagonal matrix with phase-shift ``exp(i*phi)``
-    at position ``[j,j]``.
+    at position ``[j,j]`` and the angle phi itself.
     """
     phi = np.angle(V1) - np.angle(V2)
     P = np.eye(N, dtype=np.complex_)
-    P[j,j] = np.exp(1j * phi)
+    P[mode,mode] = np.exp(1j * phi)
     
-    return P
+    return P, phi
 
 def phase_match(V1: np.complex_, V2: np.complex_):
     """
@@ -499,12 +595,6 @@ def custom_arctan(V1, V2):
         return np.arctan(-V1/V2)
     else:
         return np.pi/2
-
-def custom_angle(x1, x2):
-    if x2 != 0:
-        return np.angle(x1/x2)
-    else:
-        return 0
     
 def internal_phases(delta,summ):
     """
@@ -538,17 +628,17 @@ def MZI_layer_coord(m,modes,j,k):
     
     Parameters
     ------
-    m: the number of modes
-    modes: the modes the MZI is acting on
-    j: the coordinate giving the diagonal of the circuit
-    k: the counter within the diagonal j
+    m : the number of modes
+    modes : the modes the MZI is acting on
+    j : the coordinate giving the diagonal of the circuit
+    k : the counter within the diagonal j
     
     Returns
     ------
     New coordinates a and b (starting at 0) that will help to place the MZI in the circiut 
     and manage the shifting of the external PS Q from the middle of the circuit to the residual positions
-    a: the coordinate of the MZI layer
-    b: the affected mode
+    a : the coordinate of the MZI layer
+    b : the affected mode
     """
     
     if j%2 == 0 :
@@ -559,4 +649,3 @@ def MZI_layer_coord(m,modes,j,k):
         
     return a, b
 
-        
