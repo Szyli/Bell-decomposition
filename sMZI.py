@@ -76,7 +76,7 @@ class Beamsplitter:
         self.theta2 = theta2
 
     def __repr__(self):
-        repr = "\n MZI between modes {} and {}: \n Theta angle on {}: {:.2f} \n the angle on {}: {:.2f}".format(
+        repr = "\n MZI between modes {} and {}: \n The angle on {}: {:.2f} \n The angle on {}: {:.2f}".format(
             self.mode1,
             self.mode2,
             self.mode1,
@@ -97,6 +97,7 @@ class Interferometer:
     > - The input phases (``input_phases``)
     > - The Output phases (``output_phases``)
     > - The circuit (``circuit``)
+    > - The indices of internal phasesifters (``mzi_list``)
     
     ---
     
@@ -105,14 +106,19 @@ class Interferometer:
         input_phases (array): the external PS P applied to the input
         output_phases (array): the external PS P applied to the output
         circuit (matrix): each entry will define the phase that needs to be put at the corresponding layer a and mode b
+        mzi_list (dictionary): each key of it is the column number of the circuit matrix;
+            the values are lists of tuples containing the mode indices of theta1 and theta2
+            > column: [(row1,row2)] -> position of the internal phaseshifts in the circuit matrix
         
     """
 
     def __init__(self, num_of_modes):
         self.num_of_modes = num_of_modes
-        self.input_phases = np.zeros(shape=(num_of_modes), dtype=complex)
-        self.output_phases = np.zeros(shape=(num_of_modes), dtype=complex)
+        self.input_phases = np.array([], dtype=Externalphaseshifter)
+        self.output_phases = np.array([], dtype=Externalphaseshifter)
         self.circuit = np.zeros(shape=(num_of_modes,num_of_modes), dtype=complex)
+        self.mzi_list = {}
+        
 
     # def calculate_transformation(self) -> np.ndarray:
     #     """
@@ -139,6 +145,27 @@ class Interferometer:
     #     D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
     #     U = np.matmul(D,U)
     #     return U
+
+    def circuit_prep(self):
+        """
+        Function to finalize the circuit into one structure called
+        ``total_list``.
+        """
+        total_list = np.array([self.input_phases])
+        for col in self.mzi_list:
+            rows = np.arange(0,self.num_of_modes,1) # to follow which row was MZI and which an external ps
+            used_idx = ()
+            for row in self.mzi_list[col]:
+                used_idx += row
+                total_list = np.append(total_list, Beamsplitter(row[0],row[1],self.circuit[row[0],col],self.circuit[row[1],col]))
+            rows = np.delete(rows,used_idx)
+            # if the list is not empty
+            if rows.size:
+                for elem in rows:
+                    total_list = np.append(total_list, Externalphaseshifter(elem, self.circuit[elem,col]))
+        total_list = np.append(total_list, self.output_phases)
+        
+        return total_list
 
     def curve(self, x1: float, x2: float,
             mode: bool, flip: bool = False,
@@ -260,6 +287,9 @@ class Interferometer:
         mode_tracker = np.zeros(N)
         sc = 0.5
         num_even_elems = N*(N-1)/4 + int(N/2) # in the first half
+        
+        # calling the full source material
+        circuit = self.circuit_prep()
 
         if size == None:
             size = (N*2+4,N*2)
@@ -272,24 +302,24 @@ class Interferometer:
             plt.plot((-1, 0), (i, i), lw=1, color="blue")
 
         # external and MZIs without outputs
-        # num_of_zmi = self.num_of_modes * N/2 + int(self.num_of_modes/2)
         used = True
         even = False    # we start with odd diags
-        for idx in range(len(self.BS_list)):
+        
+        for idx in range(len(circuit)):
             
-            elem = self.BS_list[idx]
+            elem = circuit[idx]
             
-            if idx == num_even_elems -1:
-                # output phases
-                for ps in self.output_phases:
-                    used = False
-                    x = mode_tracker[ps.mode]
-                    used = self.draw_external_ps(x, N, ps, used, even, 'brown')
-                    plt.plot((x+0.25, x+0.85), (N-ps.mode, N-ps.mode), lw=1, color="blue")
-                    # update
-                    mode_tracker[ps.mode] = x+0.6
-                # switched diagonals
-                even = True
+            # if idx == num_even_elems -1:
+            #     # output phases
+            #     for ps in self.output_phases:
+            #         used = False
+            #         x = mode_tracker[ps.mode]
+            #         used = self.draw_external_ps(x, N, ps, used, even, 'brown')
+            #         plt.plot((x+0.25, x+0.85), (N-ps.mode, N-ps.mode), lw=1, color="blue")
+            #         # update
+            #         mode_tracker[ps.mode] = x+0.6
+            #     # switched diagonals
+            #     even = True
             # type check:
             if isinstance(elem, Externalphaseshifter):
                 # store the external phaseshift for the next use
@@ -297,7 +327,7 @@ class Interferometer:
                 used = False
                 if even:
                     used = self.draw_external_ps(x, N, ext_ps, used, even)
-            # "beamsplitters"
+            
             else:
                 x = np.max([mode_tracker[elem.mode1], mode_tracker[elem.mode2]])
                 
@@ -348,14 +378,15 @@ class Interferometer:
         for ii in range(N):
             plt.plot((mode_tracker[ii], max_x+1), (N-ii, N-ii), lw=1, color="blue")
 
-        plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
-        plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
-        plt.text(max_x/3, N+1-0.5, r"brown: output phase shifts ($\Phi$)", color="brown", fontsize=10)
-        # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
-        plt.text(-1, N+0.2, "Light in", fontsize=10)
-        plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
-        plt.gca().axes.set_ylim([0.5, N+1.2])
-        plt.axis("off")
+        # plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
+        # plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
+        # plt.text(max_x/3, N+1-0.5, r"brown: output phase shifts ($\Phi$)", color="brown", fontsize=10)
+        # # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
+        # plt.text(-1, N+0.2, "Light in", fontsize=10)
+        # plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
+        # plt.gca().axes.set_ylim([0.5, N+1.2])
+        # plt.axis("off")
+        
         if show_plot:
             plt.show()
 
@@ -386,7 +417,7 @@ def square_decomposition(U):
 
             V = np.matmul(V,P)
             
-            I.input_phases[s] = phi
+            I.input_phases = np.append(I.input_phases,Externalphaseshifter(s, phi))
             
             for k in range(1, j+1):
                 modes = [y, y+1]    # initial mode-pairs
@@ -412,6 +443,10 @@ def square_decomposition(U):
                 I.circuit[a,b] = theta1
                 I.circuit[a,b+1] = theta2
                 
+                if a not in I.mzi_list.keys():
+                    I.mzi_list[a] = []
+                I.mzi_list[a].append((b,b+1))
+                
                 # update coordinates
                 x -= 1
                 y -= 1
@@ -425,7 +460,7 @@ def square_decomposition(U):
 
             V = np.matmul(P,V)
             
-            I.output_phases[s] = phi
+            I.output_phases = np.append(I.output_phases,Externalphaseshifter(s, phi))
           
             for k in range(1, j+1):
                 modes = [x-1, x]     # initial mode-pairs
@@ -451,9 +486,14 @@ def square_decomposition(U):
                 I.circuit[a,b] = theta1
                 I.circuit[a,b+1] = theta2
                 
+                if a not in I.mzi_list.keys():
+                    I.mzi_list[a] = []
+                I.mzi_list[a].append((b,b+1))
+                
                 # update coordinates
                 x += 1
                 y += 1
+
 
     #add step 3 of the algorithm that implements the external phases in the middle of the cicuit
     #in addiditon we now want to move the external phases Q to the residual positions
@@ -465,7 +505,8 @@ def square_decomposition(U):
     if m%2 != 0: #if the number of modes is odd
         for j in range(2,m+1):
             a = m - j
-            xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
+            P , xi = external_ps(m, j-1, V[0,0], V[j-1,j-1])
+            V = np.dot(V,P)
    
             if j%2 != 0: #if j is odd        
                 for b in range(j-1,m):
@@ -479,13 +520,11 @@ def square_decomposition(U):
                 for b in range(j-1):
                     I.circuit[a,b] = I.circuit[a,b] - xi
             
-            P , _ = external_ps(m, j-1, V[0,0], V[j-1,j-1])
-            V = np.dot(V,P)
-            
     else: #for even m
         for j in range(2,m+1):
             a = m - j
-            xi = np.angle(V[0][0])-np.angle(V[j-1][j-1]) 
+            P , xi = external_ps(m, j-1, V[0,0], V[j-1,j-1])
+            V = np.dot(V,P)
    
             if j%2 != 0: #if j is odd        
                 for b in range(j):
@@ -498,11 +537,9 @@ def square_decomposition(U):
                     I.circuit[a+1,b] = I.circuit[a+1,b] + xi
                 for b in range(j,m):
                     I.circuit[a,b] = I.circuit[a,b] - xi
-            
-            P , _ = external_ps(m, j-1, V[0,0], V[j-1,j-1])
-            V = np.dot(V,P)
 
     I.circuit = I.circuit.T
+    I.mzi_list = dict(sorted(I.mzi_list.items()))
     
     return I
 
@@ -637,7 +674,9 @@ def MZI_layer_coord(m,modes,j,k):
     ------
     New coordinates a and b (starting at 0) that will help to place the MZI in the circiut 
     and manage the shifting of the external PS Q from the middle of the circuit to the residual positions
+    
     a : the coordinate of the MZI layer
+    
     b : the affected mode
     """
     
