@@ -120,31 +120,31 @@ class Interferometer:
         self.mzi_list = {}
         
 
-    # def calculate_transformation(self) -> np.ndarray:
-    #     """
-    #     Calculate unitary matrix describing the transformation implemented by the interferometer.
-    #     Used to verify the implementation.
+    def calculate_transformation(self) -> np.ndarray:
+        """
+        Calculate unitary matrix describing the transformation implemented by the interferometer.
+        Used to verify the implementation.
     
-    #     Returns:
-    #         complex-valued 2D numpy array representing the interferometer
-    #     """
-    #     N = self.num_of_modes
-    #     U = np.eye(N, dtype=np.complex_)
+        Returns:
+            complex-valued 2D numpy array representing the interferometer
+        """
+        N = self.num_of_modes
+        U = np.eye(N, dtype=np.complex_)
 
-    #     for BS in self.BS_list:
-    #         T = np.eye(N, dtype=np.complex_)
-    #         T[BS.mode1 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.cos(BS.theta)
-    #         T[BS.mode1 - 1, BS.mode2 - 1] = -np.sin(BS.theta)
-    #         T[BS.mode2 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.sin(BS.theta)
-    #         T[BS.mode2 - 1, BS.mode2 - 1] = np.cos(BS.theta)
-    #         U = np.matmul(T,U)
+        for BS in self.BS_list:
+            T = np.eye(N, dtype=np.complex_)
+            T[BS.mode1 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.cos(BS.theta)
+            T[BS.mode1 - 1, BS.mode2 - 1] = -np.sin(BS.theta)
+            T[BS.mode2 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.sin(BS.theta)
+            T[BS.mode2 - 1, BS.mode2 - 1] = np.cos(BS.theta)
+            U = np.matmul(T,U)
 
-    #     while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
-    #         self.output_phases.append(0)
+        while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
+            self.output_phases.append(0)
 
-    #     D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
-    #     U = np.matmul(D,U)
-    #     return U
+        D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
+        U = np.matmul(D,U)
+        return U
 
     def circuit_prep(self):
         """
@@ -226,7 +226,9 @@ class Interferometer:
             c1, c2 = self.curve(x_start, x_end, mode=False, flip=True, c=corr)
             plt.plot(c1, c2, lw=1, color="blue")
         
-    def draw_external_ps(self, x: int, N: int, ext_ps: Externalphaseshifter, used: bool, even: bool, cl: str = "red"):
+    def draw_external_ps(self, x: int, N: int, ext_ps: Externalphaseshifter,
+                        used: bool, cl: str = "red",
+                        internal: bool = False):
         """
         Function to handle the external phasshifters on the drawing.
         
@@ -242,12 +244,8 @@ class Interferometer:
         
         if not used:
             used = True
-            if not even:
-                # placeholder for the mode on which there are no external phaseshifts (UPPER)
-                plt.plot((x, x+0.3), (N - ext_ps.mode + 1, N - ext_ps.mode + 1), lw=1, color="blue")
-                plt.plot((x,x+0.3), (N - ext_ps.mode, N - ext_ps.mode), lw=1, color="blue")
-                
-                # EXTERNAL PS (on LOWER mode)
+            if not internal:
+                # EXTERNAL PS on the edges of the circuit
                 plt.plot((x+0.15, x+0.15), (N-ext_ps.mode-0.3, N-ext_ps.mode+0.2), lw=1, color="blue")
                 circle = plt.Circle((x+0.15, N-ext_ps.mode), 0.1, fill=False)
                 plt.gca().add_patch(circle)
@@ -257,22 +255,19 @@ class Interferometer:
                 else:
                     plt.text(x+0.2, N-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
             else:
-                # placeholder for the mode on which there are no external phaseshifts (LOWER)
-                plt.plot((x+1.55, x+1.7), (N - ext_ps.mode - 1, N - ext_ps.mode - 1), lw=1, color="blue")
-
-                # EXTERNAL PS (on UPPER mode)
-                plt.plot((x+1.55, x+1.55), (N-ext_ps.mode-0.2, N-ext_ps.mode+0.3), lw=1, color="blue")
-                circle = plt.Circle((x+1.55, N-ext_ps.mode), 0.1, fill=False)
+                # EXTERNAL PS inside the circuit
+                plt.plot((x+0.85, x+0.85), (N-ext_ps.mode-0.3, N-ext_ps.mode+0.2), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, N-ext_ps.mode), 0.1, fill=False)
                 plt.gca().add_patch(circle)
                 phase = "{:2f}".format(ext_ps.phi)
                 if ext_ps.phi > 0:
-                    plt.text(x+1.6, N-ext_ps.mode+0.3, phase[0:3], color=cl, fontsize=7)
+                    plt.text(x+0.9, N-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
                 else:
-                    plt.text(x+1.6, N-ext_ps.mode+0.3, phase[0:4], color=cl, fontsize=7)                
+                    plt.text(x+0.9, N-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
     
         return used
     
-    def draw(self, size = None, show_plot=True):  
+    def draw(self, size = None, show_plot=True, save_fig = False):  
         """
         Function to make a drawing of the interferometer.
 
@@ -286,7 +281,6 @@ class Interferometer:
         N = self.num_of_modes
         mode_tracker = np.zeros(N)
         sc = 0.5
-        num_even_elems = N*(N-1)/4 + int(N/2) # in the first half
         
         # calling the full source material
         circuit = self.circuit_prep()
@@ -303,30 +297,31 @@ class Interferometer:
 
         # external and MZIs without outputs
         used = True
-        even = False    # we start with odd diags
         
         for idx in range(len(circuit)):
             
             elem = circuit[idx]
-            
-            # if idx == num_even_elems -1:
-            #     # output phases
-            #     for ps in self.output_phases:
-            #         used = False
-            #         x = mode_tracker[ps.mode]
-            #         used = self.draw_external_ps(x, N, ps, used, even, 'brown')
-            #         plt.plot((x+0.25, x+0.85), (N-ps.mode, N-ps.mode), lw=1, color="blue")
-            #         # update
-            #         mode_tracker[ps.mode] = x+0.6
-            #     # switched diagonals
-            #     even = True
-            # type check:
+
             if isinstance(elem, Externalphaseshifter):
-                # store the external phaseshift for the next use
-                ext_ps = elem
                 used = False
-                if even:
-                    used = self.draw_external_ps(x, N, ext_ps, used, even)
+                x = mode_tracker[elem.mode]
+                
+                # initial PS:s
+                if (idx < len(self.input_phases)) or (idx > (len(circuit)-len(self.output_phases)-1)):
+                    used = self.draw_external_ps(x, N, elem, used)
+                    plt.plot((x+0.25, x+0.85), (N-elem.mode, N-elem.mode), lw=1, color="blue")
+                    # update
+                    mode_tracker[elem.mode] = x+0.6
+                    # for alignment in the odd N cases 
+                    if elem.mode == N-2:
+                        mode_tracker[-1] = x+0.6
+                        plt.plot((x, x+0.6), (1, 1), lw=1, color="blue")
+                else:
+                    used = self.draw_external_ps(x, N, elem, used, internal=True)
+                    plt.plot((x, x+0.6), (N-elem.mode, N-elem.mode), lw=1, color="blue")
+                    # update
+                    mode_tracker[elem.mode] = x+0.6
+                
             
             else:
                 x = np.max([mode_tracker[elem.mode1], mode_tracker[elem.mode2]])
@@ -337,7 +332,7 @@ class Interferometer:
                     plt.plot((x, x+0.3), (N - elem.mode2, N - elem.mode2), lw=1, color="blue")
                 
                 # EXTERNAL PS
-                used = self.draw_external_ps(x, N, ext_ps, used, even)
+                # used = self.draw_external_ps(x, N, ext_ps, used, even)
                 
                 # creating curved lines
                 self.draw_curved_connectors(ord=True, x_start=x+0.3, x_end=x+0.5,corr=N-elem.mode1-sc)
@@ -373,22 +368,25 @@ class Interferometer:
                 mode_tracker[elem.mode1] = x+2
                 mode_tracker[elem.mode2] = x+2
 
-        # Output external PS
         max_x = np.max(mode_tracker)
         for ii in range(N):
             plt.plot((mode_tracker[ii], max_x+1), (N-ii, N-ii), lw=1, color="blue")
 
-        # plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
-        # plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
-        # plt.text(max_x/3, N+1-0.5, r"brown: output phase shifts ($\Phi$)", color="brown", fontsize=10)
-        # # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
-        # plt.text(-1, N+0.2, "Light in", fontsize=10)
-        # plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
-        # plt.gca().axes.set_ylim([0.5, N+1.2])
-        # plt.axis("off")
+        plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
+        plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
+        # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
+        plt.text(-1, N+0.2, "Light in", fontsize=10)
+        plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
+        plt.gca().axes.set_ylim([0.2, N+1.2])
+        plt.axis("off")
+        
+        if save_fig:
+            plt.savefig("{}_{}-circuit.png".format(N,N))
         
         if show_plot:
             plt.show()
+            
+        
 
 
 def square_decomposition(U):
