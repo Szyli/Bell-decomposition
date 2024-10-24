@@ -119,32 +119,104 @@ class Interferometer:
         self.circuit = np.zeros(shape=(num_of_modes,num_of_modes), dtype=complex)
         self.mzi_list = {}
         
-
-    def calculate_transformation(self) -> np.ndarray:
+    def PS(self, phases):
         """
-        Calculate unitary matrix describing the transformation implemented by the interferometer.
-        Used to verify the implementation.
-    
-        Returns:
-            complex-valued 2D numpy array representing the interferometer
+        Gives a matrix that describes phase shifts on the corresponding modes
+        
+        ------
+        
+        Parameters
+        ------
+        phases_list : a list of phases that should be applied to the corresponding modes 
+        
+        Returns
+        ------
+        A diagonal matrix with the phase shifts on its diagonal
         """
-        N = self.num_of_modes
-        U = np.eye(N, dtype=np.complex_)
+        if isinstance(phases[0], Externalphaseshifter):
+            exps = [np.exp(1j*p.phi) for p in phases]
+        else:
+            exps = [np.exp(1j*p) for p in phases]
+        P = np.diag(exps)
+        return P
 
-        for BS in self.BS_list:
-            T = np.eye(N, dtype=np.complex_)
-            T[BS.mode1 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.cos(BS.theta)
-            T[BS.mode1 - 1, BS.mode2 - 1] = -np.sin(BS.theta)
-            T[BS.mode2 - 1, BS.mode1 - 1] = np.exp(1j * BS.phi) * np.sin(BS.theta)
-            T[BS.mode2 - 1, BS.mode2 - 1] = np.cos(BS.theta)
-            U = np.matmul(T,U)
-
-        while np.size(self.output_phases) < N:  # Autofill for users who don't want to bother with output phases
-            self.output_phases.append(0)
-
-        D = np.diag(np.exp([1j * phase for phase in self.output_phases]))
-        U = np.matmul(D,U)
-        return U
+    def calculate_transformation(self, U):
+        """
+        Tests if the calculated phases give back the target unitary
+        
+        ------
+        
+        Parameters
+        ------
+        m : the number of modes
+        In : list of phase shifts at the input of the circuit
+        Out : list of phase shifts at the output of the circuit
+        C : matrix that contains all the phases that should be implemented in the circuit
+        U : target unitary matrix
+        
+        Returns
+        ------
+        Computes the matrix that is implemented using the phases given in In, Out and C and compares it
+        to the target unitary U. If they are the same the decomposition works, 
+        if they differ, the difference is printed for furhter error analysis.
+        Note: this function can also be used to get the unitary, that is implemented by a given circuit,
+        if it has the respective geometry
+        """
+        
+        # preparing input/output external PS:s as "edge-vectors"
+        In, Out = [0]*self.num_of_modes, [0]*self.num_of_modes
+        for ps_in in self.input_phases:
+            In[ps_in.mode] = ps_in.phi
+        for ps_out in self.output_phases:
+            Out[ps_out.mode] = ps_out.phi
+        
+        #there are two different layers of BS, one starts at mode 0, the other at mode 1
+        Beam_sp1 = []
+        i = 0
+        while i < self.num_of_modes - 1:
+            Beam_sp1.append(BS(self.num_of_modes,i,i+1))
+            i = i + 2
+        layerA = matprod(Beam_sp1)   
+        
+        Beam_sp2 = []    
+        i = 1
+        while i < self.num_of_modes - 1:
+            Beam_sp2.append(BS(self.num_of_modes,i,i+1))
+            i = i + 2
+        layerB = matprod(Beam_sp2)
+        
+        #we alternate between the two different BS layers and sandwich the phase shifts
+        #since for an even number of modes we have a slightly different geometry, one has to treat the cases differently 
+        U_list = []
+        
+        if self.num_of_modes%2 != 0:
+            for j in range(self.num_of_modes):
+                if j%2 == 0:
+                    U_list.append(matprod([layerA,self.PS(self.circuit[:,self.num_of_modes-1-j]),layerA]))
+                else:
+                    U_list.append(matprod([layerB,self.PS(self.circuit[:,self.num_of_modes-1-j]),layerB]))
+        else:
+            for j in range(self.num_of_modes):
+                if j%2 == 0:
+                    U_list.append(matprod([layerB,self.PS(self.circuit[:,self.num_of_modes-1-j]),layerB]))
+                else:
+                    U_list.append(matprod([layerA,self.PS(self.circuit[:,self.num_of_modes-1-j]),layerA])) 
+        
+        #multiply all BS layers and PS in the inner circuit (all described in the output matrix C)        
+        U_mat = matprod(U_list)
+        
+        #add the external PS to the input and output 
+        U_imp = matprod([self.PS(Out),U_mat,self.PS(In)])
+        
+        #compare with the desired unitary U, they should be equal up to a global phase, so we renormalize the test matrix
+        test = np.dot(U,U_imp.T.conj())
+        test = test/test[0][0]
+        
+        if np.allclose(test,np.eye(self.num_of_modes,dtype=complex)):
+            print("Re-composition done.\tDecomposition was successful!")
+        else:
+            print("Matrices do not match!")
+            print(test-np.eye(self.num_of_modes,dtype=complex))
 
     def circuit_prep(self):
         """
@@ -385,8 +457,6 @@ class Interferometer:
         
         if show_plot:
             plt.show()
-            
-        
 
 
 def square_decomposition(U):
@@ -686,6 +756,7 @@ def MZI_layer_coord(m,modes,j,k):
         
     return a, b
 
+# re-composition:
 
 def matprod(mat_list):
     """
@@ -695,12 +766,13 @@ def matprod(mat_list):
     
     Parameters
     ------
-    mat_list: a list of matrices that shall be mulitplied in the given order
+    mat_list : a list of matrices that shall be mulitplied in the given order
     
     Returns
     ------
     A matrix that is the product of all matrices in mat_list
     """
+    
     result = np.eye(mat_list[0].shape[0])
     for i in mat_list:
         result = np.dot(result, i)
@@ -714,9 +786,9 @@ def BS(m,m1,m2):
     
     Parameters
     ------
-    m: the number of modes
-    m1: mode 1 the BS acts on
-    m1: mode 2 the BS acts on
+    m : the number of modes
+    m1 : mode 1 the BS acts on
+    m1 : mode 2 the BS acts on
     Returns
     ------
     An mxm matrix with embedded 50/50 BS on modes m1 and m2
@@ -728,91 +800,3 @@ def BS(m,m1,m2):
     B[m2,m2] = 1/(2**0.5)
     
     return B
-
-def PS(phases_list):
-    """
-    Gives a matrix that describes phase shifts on the corresponding modes
-    
-    ------
-    
-    Parameters
-    ------
-    phases_list: a list of phases that should be applied to the corresponding modes 
-    
-    Returns
-    ------
-    A diagonal matrix with the phase shifts on its diagonal
-    """
-    exps = [np.exp(1j*p) for p in phases_list]
-    P = np.diag(exps)
-    return P
-
-def test_func(m,In,Out,C,U):
-    """
-    Tests if the calculated phases give back the target unitary
-    
-    ------
-    
-    Parameters
-    ------
-    m: the number of modes
-    In: list of phase shifts at the input of the circuit
-    Out: list of phase shifts at the output of the circuit
-    C: matrix that contains all the phases that should be implemented in the circuit
-    U: target unitary matrix
-    
-    Returns
-    ------
-    Computes the matrix that is implemented using the phases given in In, Out and C and compares it
-    to the target unitary U. If they are the same the decomposition works, 
-    if they differ, the difference is printed for furhter error analysis.
-    Note: this function can also be used to get the unitary, that is implemented by a given circuit,
-    if it has the respective geometry
-    """
-    #there are two different layers of BS, one starts at mode 0, the other at mode 1
-    Beam_sp1 = []
-    i = 0
-    while i < m - 1:
-        Beam_sp1.append(BS(m,i,i+1))
-        i = i + 2
-    layerA = matprod(Beam_sp1)   
-    
-    Beam_sp2 = []    
-    i = 1
-    while i < m - 1:
-        Beam_sp2.append(BS(m,i,i+1))
-        i = i + 2
-    layerB = matprod(Beam_sp2)
-    
-    #we alternate between the two different BS layers and sandwich the phase shifts
-    #since for an even number of modes we have a slightly different geometry, one has to treat the cases differently 
-    U_list = []
-    
-    if m%2 != 0:
-        for j in range(m):
-            if j%2 == 0:
-                U_list.append(matprod([layerA,PS(C[:,m-1-j]),layerA]))
-            else:
-                U_list.append(matprod([layerB,PS(C[:,m-1-j]),layerB]))
-    else:
-        for j in range(m):
-            if j%2 == 0:
-                U_list.append(matprod([layerB,PS(C[:,m-1-j]),layerB]))
-            else:
-                U_list.append(matprod([layerA,PS(C[:,m-1-j]),layerA])) 
-    
-    #multiply all BS layers and PS in the inner circuit (all described in the output matrix C)        
-    U_mat = matprod(U_list)
-    
-    #add the external PS to the input and output 
-    U_imp = matprod([PS(Out),U_mat,PS(In)])
-    
-    #compare with the desired unitary U, they should be equal up to a global phase, so we renormalize the test matrix
-    test = np.dot(U,U_imp.T.conj())
-    test = test/test[0][0]
-    
-    if np.allclose(test,np.eye(m,dtype=complex)):
-        print("Function Works!")
-    else:
-        print(test-np.eye(m,dtype=complex))
-
