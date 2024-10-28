@@ -183,7 +183,10 @@ class Interferometer:
         while i < self.num_of_modes - 1:
             Beam_sp2.append(BS(self.num_of_modes,i,i+1))
             i = i + 2
-        layerB = matprod(Beam_sp2)
+        if not Beam_sp2:    # if it is empty
+            layerB = np.eye(self.num_of_modes)
+        else:
+            layerB = matprod(Beam_sp2)
         
         #we alternate between the two different BS layers and sandwich the phase shifts
         #since for an even number of modes we have a slightly different geometry, one has to treat the cases differently 
