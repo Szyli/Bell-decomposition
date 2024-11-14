@@ -473,10 +473,218 @@ class AnsysCircuit:
         list_of_elements (np.ndarray[Beamsplitter | Externalphaseshifter]): a list of all the elements in the circuit
     """
     
+    # include ANSYS
+    import sys, os
+    sys.path.append("D:\\lumerical\\api\\python")
+    sys.path.append(os.path.abspath(""))
+    from lumapi import INTERCONNECT
+
     def __init__(self, num_of_modes: int, list_of_elements: np.ndarray[Beamsplitter | Externalphaseshifter]):
         self.N = num_of_modes
         self.elements = list_of_elements
+        self.missing_elements: list = []
     
+    def check_lib(self) -> list[str]:
+        """
+        Function to check if custom compounds are present or not.
+
+        ---
+
+        Notes:
+        ---
+        >>> if all elements exist: return an empty list
+        >>> if some exists: return a list of the nonexisting elements (to build later)
+        >>> if the folder is empty or it does not exist: return a list of all the elements to be built
+        """
+        
+        # get path of the custom elements
+        ic = self.INTERCONNECT(hide=True)
+        path: str = ic.customlibrary()
+        path += "/Bell kits"    # name of the folder in which this code saves custom elements
+        list_of_elem_names: list[str] = ["sMZI.ice", "Ext_PS.ice", "WG.ice"]
+        missing_elements: list[str] = list_of_elem_names.copy()
+
+        if self.os.path.exists(path):   # does the folder exist?
+            dirlist: list[str] = self.os.listdir(path)
+            if dirlist != 0:    # is it empty?
+                if list_of_elem_names == dirlist:   # are all elements present?
+                    missing_elements = []
+                else:
+                    missing_elements = [elem for elem in list_of_elem_names if elem not in dirlist]
+        
+        self.missing_elements = missing_elements
+
+    def build_compounds(self):
+        """
+        Function to build missing compund elements.
+
+        - Straight Waveguide (WG)
+        - External Phase Shifter (Ext_PS)
+        - symmetric Mach-Zehnder Interferometer (sMZI)
+
+        ---
+
+        Evaluates Ansys script.
+        """
+
+        ic = self.INTERCONNECT(hide=True)
+        script: str = "groupscope('::Root Element');\n"
+
+        if "WG.ice" in self.missing_elements:
+            print("building WG")
+            # create compound: Straight Waveguide
+            compound_name: str = 'WG'
+            wave_guide_element: str = 'Straight Waveguide'
+            x_spacing: int = 200
+
+            script += "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD');\n"\
+                    + "set('x position', "+str(0)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "selectall;\n"\
+                    + "createcompound();\n"\
+                    + "set('name',"+"'"+str(compound_name)+"');\n"\
+                    + "set('prefix','"+str(compound_name)+"');\n"\
+                    + "set('description','Straight WaveGuide');\n"\
+                    + "addport('"+str(compound_name)+"','port_1', 'bidirectional', 'Optical Signal', 'left',0.5);\n"\
+                    + "addport('"+str(compound_name)+"','port_2', 'bidirectional', 'Optical Signal', 'right',0.5);\n"\
+                    + "groupscope('::Root Element::"+compound_name+"');\n"\
+                    + "select('RELAY_1');\n"\
+                    + "set('name','Port_1');\n"\
+                    + "set('x position', "+str(-x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_1','port','WGD','port 1');\n"\
+                    + "flipelement('Port_1');\n"\
+                    + "select('RELAY_2');\n"\
+                    + "set('name','Port_2');\n"\
+                    + "set('x position', "+str(x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_2','port','WGD','port 2');\n"
+
+            script += "groupscope('::Root Element');\n"\
+                    + "select('"+str(compound_name)+"');\n"\
+                    + "addtolibrary('Bell kits');\n"\
+                    + "deleteall;\n"
+
+        if "Ext_PS.ice" in self.missing_elements:
+            # create compound: External Phase Shifter
+            print("building Ext_PS")
+            compound_name: str = 'Ext_PS'
+            input_name: str = 'input'
+            output_name: str = 'output'
+            phase_shift_element: str = 'Optical Phase Shift'
+            wave_guide_element: str = 'Straight Waveguide'
+            x_spacing: int = 200
+
+            script += "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_1');\n"\
+                    + "set('x position', "+str(0)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "addelement('"+str(phase_shift_element)+"');\n"\
+                    + "set('name','Phi');\n"\
+                    + "set('x position', "+str(x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('WGD_1','port 2','Phi','port 1');\n"\
+                    + "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_2');\n"\
+                    + "set('x position', "+str(2*x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('WGD_2','port 1','Phi','port 2');\n"\
+                    + "selectall;\n"\
+                    + "createcompound();\n"\
+                    + "set('name',"+"'"+str(compound_name)+"');\n"\
+                    + "set('prefix','"+str(compound_name)+"');\n"\
+                    + "set('description','External Phase Shifter');\n"\
+                    + "addport('"+str(compound_name)+"','port_1', 'bidirectional', 'Optical Signal', 'left',0.5);\n"\
+                    + "addport('"+str(compound_name)+"','port_2', 'bidirectional', 'Optical Signal', 'right',0.5);\n"\
+                    + "groupscope('::Root Element::"+compound_name+"');\n"\
+                    + "select('RELAY_1');\n"\
+                    + "set('name','Port_1');\n"\
+                    + "set('x position', "+str(-x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_1','port','WGD_1','port 1');\n"\
+                    + "flipelement('Port_1');\n"\
+                    + "select('RELAY_2');\n"\
+                    + "set('name','Port_2');\n"\
+                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_2','port','WGD_2','port 2');\n"
+
+            script += "groupscope('::Root Element');\n"\
+                    + "select('"+str(compound_name)+"');\n"\
+                    + "addtolibrary('Bell kits');\n"\
+                    + "deleteall;\n"
+
+        if "sMZI.ice" in self.missing_elements:
+            # create compound: symmetric Mach-Zehnder Interferometer
+            print("building sMZI")
+            compound_name: str = 'sMZI'
+            input_name: str = 'input'
+            output_name: str = 'output'
+            phase_shift_element: str = 'Optical Phase Shift'
+            coupler_element: str = 'Waveguide Coupler'
+            x_spacing: int = 200
+            y_spacing: int = 80
+
+            script += "addelement('"+str(coupler_element)+"');\n"\
+                    + "set('name','Coupler_1');\n"\
+                    + "set('x position', "+str(0)+");\n"\
+                    + "set('y position', "+str(y_spacing)+");\n"\
+                    + "addelement('"+str(phase_shift_element)+"');\n"\
+                    + "set('name','Theta_1');\n"\
+                    + "set('x position', "+str(x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "addelement('"+str(phase_shift_element)+"');\n"\
+                    + "set('name','Theta_2');\n"\
+                    + "set('x position', "+str(x_spacing)+");\n"\
+                    + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "connect('Coupler_1','port 3','Theta_1','port 1');\n"\
+                    + "connect('Coupler_1','port 4','Theta_2','port 1');\n"\
+                    + "addelement('"+str(coupler_element)+"');\n"\
+                    + "set('name','Coupler_2');\n"\
+                    + "set('x position', "+str(2*x_spacing)+");\n"\
+                    + "set('y position', "+str(y_spacing)+");\n"\
+                    + "connect('Coupler_2','port 1','Theta_1','port 2');\n"\
+                    + "connect('Coupler_2','port 2','Theta_2','port 2');\n"\
+                    + "selectall;\n"\
+                    + "createcompound();\n"\
+                    + "set('name',"+"'"+str(compound_name)+"');\n"\
+                    + "set('prefix','"+str(compound_name)+"');\n"\
+                    + "set('description','Symmetric Mach-Zehnder Interferometer');\n"\
+                    + "addport('"+str(compound_name)+"','port_1', 'bidirectional', 'Optical Signal', 'left',0.25);\n"\
+                    + "addport('"+str(compound_name)+"','port_2', 'bidirectional', 'Optical Signal', 'left',0.75);\n"\
+                    + "addport('"+str(compound_name)+"','port_3', 'bidirectional', 'Optical Signal', 'right',0.25);\n"\
+                    + "addport('"+str(compound_name)+"','port_4', 'bidirectional', 'Optical Signal', 'right',0.75);\n"\
+                    + "groupscope('::Root Element::"+compound_name+"');\n"\
+                    + "select('RELAY_1');\n"\
+                    + "set('name','Port_1');\n"\
+                    + "set('x position', "+str(-x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_1','port','Coupler_1','port 1');\n"\
+                    + "flipelement('Port_1');\n"\
+                    + "select('RELAY_2');\n"\
+                    + "set('name','Port_2');\n"\
+                    + "set('x position', "+str(-x_spacing)+");\n"\
+                    + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "connect('Port_2','port','Coupler_1','port 2');\n"\
+                    + "flipelement('Port_2');\n"\
+                    + "select('RELAY_3');\n"\
+                    + "set('name','Port_3');\n"\
+                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('Port_3','port','Coupler_2','port 3');\n"\
+                    + "select('RELAY_4');\n"\
+                    + "set('name','Port_4');\n"\
+                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "connect('Port_4','port','Coupler_2','port 4');\n"
+
+            script += "groupscope('::Root Element');\n"\
+                    + "select('"+str(compound_name)+"');\n"\
+                    + "addtolibrary('Bell kits');\n"\
+                    + "deleteall;\n"
+
+        ic.eval(script)
 
     def build_Ext_PS(self, ID: int, phi: float, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
         """
@@ -496,15 +704,15 @@ class AnsysCircuit:
             Ansys script to evaluate.
         """
         element_name: str = "Ext_PS"
-        element_ID: str = "ps_" + str(ID)
-        compound_name: str = "PS_1"
+        element_ID: str = "PS_" + str(ID)
+        compound_name: str = "Phi"
 
         script: str = "addelement('"+element_name+"');\n"\
-                    +"set('name','"+element_ID+"');\n"\
-                    +"set('x position', "+str(x)+");\n"\
-                    +"set('y position', "+str(y)+");\n"\
-                    +"select('"+element_ID+"::"+compound_name+"');\n"\
-                    +"set('phase shift',"+str(phi)+");\n"
+                    + "set('name','"+element_ID+"');\n"\
+                    + "set('x position', "+str(x)+");\n"\
+                    + "set('y position', "+str(y)+");\n"\
+                    + "select('"+element_ID+"::"+compound_name+"');\n"\
+                    + "set('phase shift',"+str(phi)+");\n"
         if port:
             # if port is not None
             # NOTE: port = 0 would also skip this statement but
@@ -512,8 +720,8 @@ class AnsysCircuit:
             # NOTE: in these cases (mainly input and output)
             # we need to also carefully redefine the waveguides
             # in these compund elements
-            port: str = "port " + str(port)
-            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port 1');"
+            port: str = "port_" + str(port)
+            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
         
         return script, element_ID
 
@@ -547,13 +755,13 @@ class AnsysCircuit:
         compound_name_2: str = "Theta_2"
 
         script: str = "addelement('"+element_name+"');\n"\
-                    +"set('name','"+element_ID+"');\n"\
-                    +"set('x position', "+str(x)+");\n"\
-                    +"set('y position', "+str(y)+");\n"\
-                    +"select('"+element_ID+"::"+compound_name_1+"');\n"\
-                    +"set('phase shift',"+str(theta_1)+");\n"\
-                    +"select('"+element_ID+"::"+compound_name_2+"');\n"\
-                    +"set('phase shift',"+str(theta_2)+");\n"
+                    + "set('name','"+element_ID+"');\n"\
+                    + "set('x position', "+str(x)+");\n"\
+                    + "set('y position', "+str(y)+");\n"\
+                    + "select('"+element_ID+"::"+compound_name_1+"');\n"\
+                    + "set('phase shift',"+str(theta_1)+");\n"\
+                    + "select('"+element_ID+"::"+compound_name_2+"');\n"\
+                    + "set('phase shift',"+str(theta_2)+");\n"
         if port_1:
             # if port is not None
             # NOTE: port = 0 would also skip this statement but
@@ -561,11 +769,11 @@ class AnsysCircuit:
             # NOTE: in these cases (mainly input and output)
             # we need to also carefully redefine the waveguides
             # in these compund elements
-            port: str = "port " + str(port_1)
-            script += "connect('"+prior_elem_1+"','"+port+"','"+element_ID+"','port 1');"
+            port: str = "port_" + str(port_1)
+            script += "connect('"+prior_elem_1+"','"+port+"','"+element_ID+"','port_1');"
         if port_2:
-            port = "port " + str(port_2)
-            script += "connect('"+prior_elem_2+"','"+port+"','"+element_ID+"','port 2');"
+            port = "port_" + str(port_2)
+            script += "connect('"+prior_elem_2+"','"+port+"','"+element_ID+"','port_2');"
         
         return script, element_ID
 
@@ -584,13 +792,13 @@ class AnsysCircuit:
             Ansys script to evaluate.
         """
         # might be unnecessary
-        element_name: str = "WGD"
-        element_ID: str = "wgd" + str(ID)
+        element_name: str = "WG"
+        element_ID: str = "WG_" + str(ID)
         
         script: str = "addelement('"+element_name+"');\n"\
-                    +"set('name','"+element_ID+"');\n"\
-                    +"set('x position', "+str(x)+");\n"\
-                    +"set('y position', "+str(y)+");\n"
+                    + "set('name','"+element_ID+"');\n"\
+                    + "set('x position', "+str(x)+");\n"\
+                    + "set('y position', "+str(y)+");\n"
         
         if port:
             # if port is not None
@@ -599,18 +807,27 @@ class AnsysCircuit:
             # NOTE: in these cases (mainly input and output)
             # we need to also carefully redefine the waveguides
             # in these compund elements
-            port: str = "port " + str(port)
-            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port 1');"
+            port: str = "port_" + str(port)
+            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
         
         return script, element_ID
 
     def build_Circuit(self):
-        
-        # include ANSYS
-        import sys, os
-        sys.path.append("D:\\lumerical\\api\\python")
-        sys.path.append(os.path.abspath(""))
-        from lumapi import INTERCONNECT
+        """
+        Function to build the integrated optical circuit, in Ansys Interconnect,
+        that returns the Unitary operation defined by the user.
+
+        ---
+
+        Saves the circuit in ``.icp`` format for Ansys to open.
+
+        """
+        # Pre-checks:
+        self.check_lib()
+        if self.missing_elements:
+            print("Building elements first:",self.missing_elements)
+            self.build_compounds()
+            print("Necessarry compounds have been built!")
         
         # (name of element, port of element on its right, id of column)
         circuit_map: dict[tuple[None | int, None | int, None | int]] = dict.fromkeys(np.arange(0, self.N, 1),(None, None, 0))
@@ -662,11 +879,11 @@ class AnsysCircuit:
             
         
         # evaluate complete circuit
-        ic = INTERCONNECT(hide=True)
+        ic = self.INTERCONNECT(hide=True)
         ic.eval(eval_string)
         ic.save(f"{self.N}x{self.N}_test.icp")
 
-        return eval_string
+        # return eval_string
 
 
 
