@@ -15,6 +15,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+class Waveguide:
+    """
+    This class represents a straight waveguide.
+    """
+    def __init__(self, mode: int):
+        self.mode = mode
+
+    def __repr__(self):
+        repr = "\n Straight waveguide on mode {}".format(self.mode)
+        return repr
+
 class Externalphaseshifter:
     """
     This class defines the external phaseshifters (PS) applied
@@ -218,12 +229,25 @@ class Interferometer:
             print("Matrices do not match!\nDifference:")
             print(test-np.eye(self.num_of_modes, dtype=complex))
 
-    def circuit_prep(self) -> np.ndarray[Beamsplitter | Externalphaseshifter]:
+    def waveguide_filler(self,
+                source: np.ndarray[Externalphaseshifter | Beamsplitter]) -> list[Waveguide | Externalphaseshifter]:
+        """
+        Function to find modes on which there is no element just a waveguide.
+        """
+        modes_with_wg: list[bool | Externalphaseshifter | Waveguide] = [False]*self.num_of_modes
+        for elem in source:
+            modes_with_wg[elem.mode] = elem
+        modes_with_wg = [Waveguide(idx) if elem==False else elem for idx, elem in enumerate(modes_with_wg)]
+
+        return modes_with_wg
+
+    def circuit_prep(self) -> np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]:
         """
         Function to finalize the circuit into one structure called
         ``total_list``.
         """
-        total_list: np.ndarray[Beamsplitter | Externalphaseshifter] = np.array([self.input_phases])
+        
+        total_list: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide] = np.array(self.waveguide_filler(self.input_phases))
         
         col: int
         row: tuple[int, int]
@@ -237,7 +261,8 @@ class Interferometer:
             if rows.size:   # if the list is not empty
                 for elem in rows:
                     total_list = np.append(total_list, Externalphaseshifter(elem, self.circuit[elem,col]))
-        total_list = np.append(total_list, self.output_phases)
+        
+        total_list = np.append(total_list, self.waveguide_filler(self.output_phases))
         
         return total_list
 
@@ -352,15 +377,13 @@ class Interferometer:
             size (tuple): x and y dimension of plot
             show_plot (bool): whether to show the generated plot
         """
-
-        # TO BE INTERCHANGED FOR THE NEW CIRCUIT IMPLEMENTATION
         
         N: int = self.num_of_modes
         mode_tracker: np.ndarray[int] = np.zeros(N)
         sc: float = 0.5
         
         # calling the full source material
-        circuit: np.ndarray[Beamsplitter | Externalphaseshifter] = self.circuit_prep()
+        circuit: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide] = self.circuit_prep()
 
         if size == None:
             size = (N*2+4, N*2)
@@ -378,7 +401,7 @@ class Interferometer:
         
         for idx in range(len(circuit)):
             
-            elem: Beamsplitter | Externalphaseshifter = circuit[idx]
+            elem: Beamsplitter | Externalphaseshifter | Waveguide = circuit[idx]
 
             if isinstance(elem, Externalphaseshifter):
                 used = False
@@ -400,7 +423,7 @@ class Interferometer:
                     # update
                     mode_tracker[elem.mode] = x+0.6
 
-            else:
+            if isinstance(elem, Beamsplitter):
                 x: float = np.max([mode_tracker[elem.mode1], mode_tracker[elem.mode2]])
                 
                 if used:
@@ -470,7 +493,7 @@ class AnsysCircuit:
     
     Args:
         num_of_modes (int): total number of modes/dimension of Unitary matrix
-        list_of_elements (np.ndarray[Beamsplitter | Externalphaseshifter]): a list of all the elements in the circuit
+        list_of_elements (np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]): a list of all the elements in the circuit
     """
     
     # include ANSYS
@@ -479,11 +502,13 @@ class AnsysCircuit:
     sys.path.append(os.path.abspath(""))
     from lumapi import INTERCONNECT
 
-    def __init__(self, num_of_modes: int, list_of_elements: np.ndarray[Beamsplitter | Externalphaseshifter]):
+    def __init__(self, num_of_modes: int,
+                list_of_elements: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]):
+        
         self.N = num_of_modes
         self.elements = list_of_elements
         self.missing_elements: list = []
-    
+
     def check_lib(self) -> list[str]:
         """
         Function to check if custom compounds are present or not.
@@ -686,6 +711,41 @@ class AnsysCircuit:
 
         ic.eval(script)
 
+    def build_WGD(self, ID: int, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
+        """
+        Function to build Straight Waveguides.
+
+        Args:
+            ID (int): serial number of this element
+            prior_elem (str): name of the element to connect this with
+            port (int): serial number of ``prior_elem``:s port to connect this element's port with
+            x (int): ``x`` position of element
+            y (int): ``y`` position of element
+
+        Returns:
+            Ansys script to evaluate.
+        """
+        # might be unnecessary
+        element_name: str = "WG"
+        element_ID: str = "WG_" + str(ID)
+        
+        script: str = "addelement('"+element_name+"');\n"\
+                    + "set('name','"+element_ID+"');\n"\
+                    + "set('x position', "+str(x)+");\n"\
+                    + "set('y position', "+str(y)+");\n"
+        
+        if port:
+            # if port is not None
+            # NOTE: port = 0 would also skip this statement but
+            # we name ports by counting from 1
+            # NOTE: in these cases (mainly input and output)
+            # we need to also carefully redefine the waveguides
+            # in these compund elements
+            port: str = "port_" + str(port)
+            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
+        
+        return script, element_ID
+
     def build_Ext_PS(self, ID: int, phi: float, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
         """
         Function to build an external PhaseShifter with
@@ -777,40 +837,6 @@ class AnsysCircuit:
         
         return script, element_ID
 
-    def build_WGD(self, ID: int, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
-        """
-        Function to build Straight Waveguides.
-
-        Args:
-            ID (int): serial number of this element
-            prior_elem (str): name of the element to connect this with
-            port (int): serial number of ``prior_elem``:s port to connect this element's port with
-            x (int): ``x`` position of element
-            y (int): ``y`` position of element
-
-        Returns:
-            Ansys script to evaluate.
-        """
-        # might be unnecessary
-        element_name: str = "WG"
-        element_ID: str = "WG_" + str(ID)
-        
-        script: str = "addelement('"+element_name+"');\n"\
-                    + "set('name','"+element_ID+"');\n"\
-                    + "set('x position', "+str(x)+");\n"\
-                    + "set('y position', "+str(y)+");\n"
-        
-        if port:
-            # if port is not None
-            # NOTE: port = 0 would also skip this statement but
-            # we name ports by counting from 1
-            # NOTE: in these cases (mainly input and output)
-            # we need to also carefully redefine the waveguides
-            # in these compund elements
-            port: str = "port_" + str(port)
-            script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
-        
-        return script, element_ID
 
     def build_Circuit(self):
         """
@@ -831,26 +857,36 @@ class AnsysCircuit:
         
         # (name of element, port of element on its right, id of column)
         circuit_map: dict[tuple[None | int, None | int, None | int]] = dict.fromkeys(np.arange(0, self.N, 1),(None, None, 0))
+        input_connect: list[str] = []   # list of element's name in the first column
         eval_string: str = "groupscope('::Root Element');"
+        wgd_id: int = 0
         ps_id: int = 0
         smzi_id: int = 0
         x_spacing: int = 200
         y_spacing: int = 160
         
-        elem: Beamsplitter | Externalphaseshifter
+        elem: Beamsplitter | Externalphaseshifter | Waveguide
         for elem in self.elements:
-            if isinstance(elem, Externalphaseshifter):
+            if isinstance(elem, Waveguide):
+                if circuit_map[elem.mode]:  # if the first column of the circuit is set already
+                    script, name = self.build_WGD(wgd_id,
+                                                circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
+                                                circuit_map[elem.mode][0], circuit_map[elem.mode][1])
+                    # update dictionary and input_connect
+                    if not circuit_map[elem.mode][0]:
+                        input_connect.append(name)
+                    circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
+                eval_string += script
+                wgd_id += 1
+            elif isinstance(elem, Externalphaseshifter):
                 if circuit_map[elem.mode]:  # if the first column of the circuit is set already
                     script, name = self.build_Ext_PS(ps_id, elem.phi,
                                                     circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
                                                     circuit_map[elem.mode][0], circuit_map[elem.mode][1])
                     # update dictionary
+                    if not circuit_map[elem.mode][0]:
+                        input_connect.append(name)
                     circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
-                else:
-                    # update dictionary
-                    script, name = self.build_Ext_PS(ps_id, elem.phi, 0, elem.mode*y_spacing)
-                    circuit_map[elem.mode] = (name, 2, 1)
-                # extend evaluation string
                 eval_string += script
                 ps_id += 1
             elif isinstance(elem, Beamsplitter):
@@ -866,18 +902,47 @@ class AnsysCircuit:
                     # update dictionary
                     circuit_map[elem.mode1] = (name, 3, x + 1)
                     circuit_map[elem.mode2] = (name, 4, x + 1)
-                else:
-                    script, name =  self.build_sMZI(smzi_id, elem.theta1, elem.theta2,
-                                                    0, (elem.mode1 + elem.mode2)*0.5*y_spacing)
-                    circuit_map[elem.mode1] = (name, 3, 1)
-                    circuit_map[elem.mode2] = (name, 4, 1)
-                # extend evaluation string
                 eval_string += script
                 smzi_id += 1
             else:
                 print(f"Error! Element type is incorrect at index position: {ps_id+smzi_id}")
-            
         
+        # Finaly, compactify circuit
+        circuit_name = f"U_{self.N}x{self.N}"
+        input_name = "input"
+        output_name = "output"
+
+        eval_string += "selectall;\n"\
+                    + "createcompound();\n"\
+                    + "set('name',"+"'"+str(circuit_name)+"');\n"\
+                    + "set('prefix','"+str(circuit_name)+"');\n"\
+                    + "set('description','Integrated photonical representation of decomposed "+str(circuit_name)+" matrix based on scheme by Bell et.al.');\n"
+        
+        port_pos: float = 1/(self.N+1)
+        for id in range(1, self.N+1, 1):
+            eval_string += "addport('"+str(circuit_name)+"','"+input_name+"_"+str(id)+"', 'bidirectional', 'Optical Signal', 'left',"+str(port_pos*id)+");\n"\
+                    + "addport('"+str(circuit_name)+"','"+output_name+"_"+str(id)+"', 'bidirectional', 'Optical Signal', 'right',"+str(port_pos*id)+");\n"
+        
+        eval_string += "groupscope('::Root Element::"+circuit_name+"');\n"
+        for i in range(1,self.N+1,1):   # input RELAY connections
+            rel_idx_in = 2*i-1
+            rel_idx_out = i*2
+
+            # input ports
+            eval_string += "select('RELAY_"+str(rel_idx_in)+"');\n"\
+                        + "set('name','input_"+str(i)+"');\n"\
+                        + "set('x position', "+str(-x_spacing)+");\n"\
+                        + "set('y position', "+str(y_spacing*(i-1))+");\n"\
+                        + "connect('input_"+str(i)+"','port','"+str(input_connect[i-1])+"','port_1');\n"\
+                        + "flipelement('input_"+str(i)+"');\n"
+            # output ports
+            eval_string += "select('RELAY_"+str(rel_idx_out)+"');\n"\
+                        + "set('name','output_"+str(i)+"');\n"\
+                        + "set('x position', "+str(circuit_map[i-1][2]*x_spacing)+");\n"\
+                        + "set('y position', "+str(y_spacing*(i-1))+");\n"\
+                        + "connect('output_"+str(i)+"','port','"+str(circuit_map[i-1][0])+"','port_2');\n"
+        
+        eval_string += "groupscope('::Root Element');\n"
         # evaluate complete circuit
         ic = self.INTERCONNECT(hide=True)
         ic.eval(eval_string)
@@ -1224,5 +1289,5 @@ def function_to_rule_them_all(unitary_matrix: np.ndarray):
     I.draw(save_fig=False)
     
     AnsysCirc = AnsysCircuit(unitary_matrix.shape[0], I.circuit_prep())
-    script = AnsysCirc.build_Circuit()
-    print(script)
+    AnsysCirc.build_Circuit()
+    # print(script)
