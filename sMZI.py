@@ -1,10 +1,10 @@
 """
     This module aims to implement the decomposition of unitary matrices
-    using Symmetric Mach-Zehnder Interferometers based on Bell's further
+    using Symmetric Mach-Zehnder Interferometers based on Bell and Walmsley's further
     developed approach of Clement's scheme.
     
-    William R. Clements: An Optimal Design for Universal Multiport Interferometers
-    B.A. Bell: Further Compactifying Linear Optical Unitaries
+    William R. Clements et al.: An Optimal Design for Universal Multiport Interferometers
+    B.A. Bell et al.: Further Compactifying Linear Optical Unitaries
     
     The following code was heavily influenced by Clement's interferometer from
     github: https://github.com/clementsw/interferometer
@@ -17,7 +17,15 @@ import matplotlib.pyplot as plt
 
 class Waveguide:
     """
-    This class represents a straight waveguide.
+    This class defines the straight waveguides (WG).
+    Used on modes where neither phaseshifters (PS)
+    nor symmetric Mach-Zehnder Interferometers (sMZI)
+    are applied.
+    
+    ---
+    
+    Args:
+        mode (int): the index of the mode on which the WG is located
     """
     def __init__(self, mode: int):
         self.mode = mode
@@ -28,32 +36,31 @@ class Waveguide:
 
 class Externalphaseshifter:
     """
-    This class defines the external phaseshifters (PS) applied
-    before the first beamsplitters in each diagonals.
-    May be used for the final layer of external PS:s
-    positioned in the "middle" of the circuit.
+    This class defines the external phaseshifters (PS)
+    i.e. the ones that are not part of the
+    symmetric Mach-Zehnder Interferometers.
     
     ---
     
     Args:
         mode (int): the index of the mode on which the PS is located
-        phi (float): the angle of the PS
+        phi (float): the angle of the PS in radians
     """
     def __init__(self, mode: int, phi: float):
         self.mode = mode
         self.phi = phi
 
     def __repr__(self):
-        repr = "\n External PS on mode {} with angle \t phi: {:.2f}".format(
+        repr = "\n External phaseshift on mode {} with angle \t phi: {:.2f}".format(
             self.mode,
-            self.phi,
-            )
+            self.phi)
         return repr
 
 class Beamsplitter:
     """
-    This class defines a tunable beam splitter cell
-    i.e. a sMZI with internal phase shifters.
+    This class defines the tunable beam splitter cell
+    i.e. a symmetric Mach-Zehnder Interferometer (sMZI)
+    with two internal phase shifters (PS).
     
     ---
     
@@ -67,17 +74,17 @@ class Beamsplitter:
     - ``summ = (theta1 + theta2)/2``
     - ``delta = (theta1 - theta2)/2``
     
-    with ``theta1`` and ``theta2`` being the internal phase shifts.
+    with ``theta1`` and ``theta2`` being the internal phaseshift angles
+    in radians.
     
     ---
 
     Args:
-        mode1 (int): the index of the first mode (the first mode is mode 1)
-        mode2 (int): the index of the second mode
-        theta1 (float): angle of internal phase shift on mode1
-        theta2 (float): angle of internal phase shift on mode2
+        mode1 (int): the index of the first mode ("upper")
+        mode2 (int): the index of the second mode ("lower")
+        theta1 (float): angle of internal phase shift on ``mode1``
+        theta2 (float): angle of internal phase shift on ``mode2``
     """
-    
 
     def __init__(self, mode1: int, mode2: int, theta1: float, theta2: float):
         self.mode1 = mode1
@@ -86,40 +93,46 @@ class Beamsplitter:
         self.theta2 = theta2
 
     def __repr__(self):
-        repr = "\n MZI between modes {} and {}: \n The angle on {}: {:.2f} \n The angle on {}: {:.2f}".format(
+        repr = "\n Symmetric Mach-Zehnder Interferometer between modes {} and {}:\
+                \n The angle on mode {}: {:.2f} \n The angle on mode {}: {:.2f}".format(
             self.mode1,
             self.mode2,
             self.mode1,
             self.theta1,
             self.mode2,
-            self.theta2,
-            )
+            self.theta2)
         return repr
 
 class Interferometer:
     """
-    This class defines an interferometer.
-    
-    ---
-
-    An interferometer contains parameters of the whole circuit; such as
-    > - The number of modes (``num_of_modes``)
-    > - The input phases (``input_phases``)
-    > - The Output phases (``output_phases``)
-    > - The circuit (``circuit``)
-    > - The indices of internal phasesifters (``mzi_list``)
+    This class defines the parameters of a programmable integrated
+    photonic interferometer that evaluates the given Unitary operation.
     
     ---
     
     Args:
-        num_of_modes (int): total number of modes
-        input_phases (array): the external PS P applied to the input
-        output_phases (array): the external PS P applied to the output
-        circuit (matrix): each entry will define the phase that needs to be put at the corresponding layer a and mode b
-        mzi_list (dictionary): each key of it is the column number of the circuit matrix;
-            the values are lists of tuples containing the mode indices of theta1 and theta2
-            > column: [(row1,row2)] -> position of the internal phaseshifts in the circuit matrix
-        
+        num_of_modes (int): total number of modes (dimension of Unitary matrix)
+
+    ---
+    
+    Notes
+    ---
+    In addition, the ``Interferometer`` class contains the following parameters:
+    - ``input_phases``: An array containing the external phaseshifts (PS) applied
+        at the input. These are the external PS:s applied at the beginning of each
+        odd diagonals in the decomposition scheme.
+    - ``output_phases``: An array containing the external phaseshifts (PS) applied
+        at the output. These are the external PS:s applied at the beginning of each
+        even diagonals in the decomposition scheme.
+    - ``circuit``: A matrix (2D array) of the circuit where each entry defines the
+        phaseshifts (PS) at the corresponding column `a` and row (mode) `b`. It excludes
+        the ``input_phases`` and ``output_phases``.
+    - ``mzi_list``: A dictionary where each key is the column number of the ``circuit`` matrix.
+            The values are lists of tuples of two containing the mode indices
+            of the internal phaseshift (PS) values ``theta1`` and ``theta2`` in radians.
+    Representation:
+    
+    > ``column: [(row1,row2)]`` -> position of the internal phaseshifts in the ``circuit`` matrix.
     """
 
     def __init__(self, num_of_modes: int):
@@ -131,42 +144,48 @@ class Interferometer:
         
     def PS(self, phases: list[float] | np.ndarray[float]) -> np.ndarray[complex]:
         """
-        Gives a matrix that describes phase shifts on the corresponding modes
+        Function that gives a matrix which describes phase shifts on the corresponding modes.
         
-        ------
+        ---
         
-        Parameters
-        ------
-        phases : a list of phases that should be applied to the corresponding modes 
+        Args:
+            phases (list): phaseshifts (PS) to apply on the corresponding modes
         
         Returns
-        ------
-        A diagonal matrix with the phase shifts on its diagonal
+        ---
+            A diagonal matrix with the corresponding phase shifts on the diagonal.
         """
         if isinstance(phases[0], Externalphaseshifter):
             exps: list[complex] = [np.exp(1j*p.phi) for p in phases]
         else:
             exps: list[complex] = [np.exp(1j*p) for p in phases]
-        P: np.ndarray[complex] = np.diag(exps)
-        return P
+        P_mat: np.ndarray[complex] = np.diag(exps)
+        return P_mat
 
     def calculate_transformation(self, U: np.ndarray) -> None:
         """
-        Tests if the calculated phases give back the target unitary
+        Function to tests if the given Unitary matrix can be restored using the
+        decomposed elements.
         
-        ------
+        ---
         
-        Parameters
-        ------
-        U : target unitary matrix
+        Args:
+            U (array): initial/target unitary matrix
+        
+        ---
         
         Returns
-        ------
-        Computes the matrix that is implemented using the phases given in In, Out and C and compares it
-        to the target unitary U. If they are the same the decomposition works, 
-        if they differ, the difference is printed for furhter error analysis.
-        Note: this function can also be used to get the unitary, that is implemented by a given circuit,
-        if it has the respective geometry
+        ---
+            Prints message corresponding to the success of the recomposition.
+            If the matrices equal (up to a certain tolerance) the decomposition works,
+            otherwise, the difference is printed for further analysis.
+
+        ---
+                    
+        Notes
+        ---
+            This function can also be used to get the unitary of a given circuit given that
+            it has the respective geometry.
         """
         
         # preparing input/output external PS:s as "edge-vectors"
@@ -178,7 +197,7 @@ class Interferometer:
         for ps in self.output_phases:
             Out[ps.mode] = ps.phi
         
-        #there are two different layers of BS, one starts at mode 0, the other at mode 1
+        # there are two different layers of BS, one starts at mode 0, the other at mode 1
         Beam_sp1: list[np.ndarray[complex]] = []
         i: int = 0
         while i < self.num_of_modes - 1:
@@ -189,52 +208,67 @@ class Interferometer:
         Beam_sp2: list[np.ndarray[complex]] = []    
         i: int = 1
         while i < self.num_of_modes - 1:
-            Beam_sp2.append(BS(self.num_of_modes,i,i+1))
+            Beam_sp2.append(BS(self.num_of_modes, i, i+1))
             i = i + 2
         if not Beam_sp2:    # if it is empty
             layerB: np.ndarray[int] = np.eye(self.num_of_modes)
         else:
             layerB: np.ndarray[complex] = matprod(Beam_sp2)
         
-        #we alternate between the two different BS layers and sandwich the phase shifts
-        #since for an even number of modes we have a slightly different geometry, one has to treat the cases differently 
+        # we alternate between the two different BS layers and sandwich the phase shifts
+        # since for an even number of modes we have a slightly different geometry, one has to treat the cases differently 
         U_list: list[np.ndarray[complex]] = []
         
-        if self.num_of_modes%2 != 0:
+        if self.num_of_modes%2 != 0:    # odd number of modes
             for k in range(self.num_of_modes):
                 if k%2 == 0:
-                    U_list.append(matprod([layerA,self.PS(self.circuit[:,self.num_of_modes-1-k]),layerA]))
+                    U_list.append(matprod([layerA, self.PS(self.circuit[:, self.num_of_modes-1-k]), layerA]))
                 else:
-                    U_list.append(matprod([layerB,self.PS(self.circuit[:,self.num_of_modes-1-k]),layerB]))
-        else:
+                    U_list.append(matprod([layerB, self.PS(self.circuit[:, self.num_of_modes-1-k]), layerB]))
+        else:   # even number of modes
             for k in range(self.num_of_modes):
                 if k%2 == 0:
-                    U_list.append(matprod([layerB,self.PS(self.circuit[:,self.num_of_modes-1-k]),layerB]))
+                    U_list.append(matprod([layerB, self.PS(self.circuit[:, self.num_of_modes-1-k]), layerB]))
                 else:
-                    U_list.append(matprod([layerA,self.PS(self.circuit[:,self.num_of_modes-1-k]),layerA])) 
+                    U_list.append(matprod([layerA, self.PS(self.circuit[:, self.num_of_modes-1-k]), layerA])) 
         
-        #multiply all BS layers and PS in the inner circuit (all described in the output matrix C)        
+        # multiply all BS layers and PS:S in the inner circuit (all described in the output matrix C)        
         U_mat: np.ndarray[complex] = matprod(U_list)
         
-        #add the external PS to the input and output 
-        U_imp: np.ndarray[complex] = matprod([self.PS(Out),U_mat,self.PS(In)])
+        # add the external PS to the input and output 
+        U_imp: np.ndarray[complex] = matprod([self.PS(Out), U_mat, self.PS(In)])
         
-        #compare with the desired unitary U, they should be equal up to a global phase, so we renormalize the test matrix
-        test: np.ndarray[complex] = np.dot(U,U_imp.T.conj())
+        # compare with the desired unitary U, they should be equal up to a global phase, so we renormalize the test matrix
+        test: np.ndarray[complex] = np.dot(U, U_imp.T.conj())
         test = test/test[0][0]
         
-        if np.allclose(test,np.eye(self.num_of_modes, dtype=complex)):
-            print("Re-composition done.\tDecomposition was successful!")
+        if np.allclose(test, np.eye(self.num_of_modes, dtype=complex)):
+            print("Re-composition finished.\tDecomposition was successful!")
         else:
             print("Matrices do not match!\nDifference:")
             print(test-np.eye(self.num_of_modes, dtype=complex))
 
     def waveguide_filler(self,
-                source: np.ndarray[Externalphaseshifter | Beamsplitter]) -> list[Waveguide | Externalphaseshifter]:
+                source: np.ndarray[Externalphaseshifter]) -> list[Waveguide | Externalphaseshifter]:
         """
-        Function to find modes on which there is no element just a waveguide.
+        Function to find modes on which there are no phaseshifts (PS) nor
+        symmetric Mach-Zehnder Interferometers (sMZI) just waveguides (WG)
+        and include them.
+        
+        ---
+        
+        Args:
+            source (array): either ``input_phases`` or ``output_phases``
+        
+        ---
+        
+        Returns
+        ---
+            A list containing the input ``source`` supplemented with the missing waveguides.
         """
+        
         modes_with_wg: list[bool | Externalphaseshifter | Waveguide] = [False]*self.num_of_modes
+        elem: Externalphaseshifter
         for elem in source:
             modes_with_wg[elem.mode] = elem
         modes_with_wg = [Waveguide(idx) if elem==False else elem for idx, elem in enumerate(modes_with_wg)]
@@ -243,24 +277,32 @@ class Interferometer:
 
     def circuit_prep(self) -> np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]:
         """
-        Function to finalize the circuit into one structure called
+        Function to finalize the circuit into one structure (array) called
         ``total_list``.
+        
+        ---
+        
+        Returns
+        ---
+            Array of circuit elements reading from first column, on the left of the circuit,
+            to the right of it being the elements at the output.
         """
         
         total_list: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide] = np.array(self.waveguide_filler(self.input_phases))
         
         col: int
         row: tuple[int, int]
+        elem: int
         for col in self.mzi_list:
-            rows: np.ndarray[int] = np.arange(0,self.num_of_modes,1) # to follow which row was MZI and which an external ps
+            rows: np.ndarray[int] = np.arange(0, self.num_of_modes, 1)  # to follow which row was MZI and which a PS
             used_idx: tuple[int, int] = ()
             for row in self.mzi_list[col]:
                 used_idx += row
                 total_list = np.append(total_list, Beamsplitter(row[0],row[1], self.circuit[row[0],col], self.circuit[row[1],col]))
-            rows: np.ndarray = np.delete(rows,used_idx) # remaining are external phaseshifts
-            if rows.size:   # if the list is not empty
-                for elem in rows:
-                    total_list = np.append(total_list, Externalphaseshifter(elem, self.circuit[elem,col]))
+            # Update rows; Remaining are PS:s
+            rows: np.ndarray = np.delete(rows, used_idx)
+            for elem in rows:
+                total_list = np.append(total_list, Externalphaseshifter(elem, self.circuit[elem, col]))
         
         total_list = np.append(total_list, self.waveguide_filler(self.output_phases))
         
@@ -269,15 +311,25 @@ class Interferometer:
     def curve(self, x1: float, x2: float, mode: bool, flip: bool = False,
             res: int = 10, scale: float = 0.5, c: float = 0) -> tuple[np.ndarray[float], np.ndarray[float]]:
         """
+        Function to calculate coordinates of curved lines for the directional couplers of the circuit.
         
-        Args
-        ------
-        mode : True gives `cos`; False gives `sin`
-        flip : determines if curve needs to be mirrored around the x-axes
-        res : resolution
-        scale : relative height of curve
-            to set return values corresponding to the environment
-        c : shift in `y` direction
+        ---
+        
+        Args:
+            x1 (int): starting position in ``x``
+            x2 (int): final position in ``x``
+            mode (bool): True gives `cos`, False gives `sin`
+            flip (bool): determines if curve needs to be mirrored around the x-axes
+            res (int): resolution
+            scale (float): relative height of curve to set return values corresponding
+                to the environment
+            c (float): shift in ``y`` direction
+
+        ---
+        
+        Returns
+        ---
+            Two arrays ``(x, y)`` to plot.
         """
         x: np.ndarray[float] = np.linspace(0, np.pi/2, res)
         
@@ -294,19 +346,24 @@ class Interferometer:
         
         x = np.linspace(x1, x2, res)
         
-        return (x,y)
+        return (x, y)
     
     def draw_curved_connectors(self, ord: bool, x_start: float, x_end: float, corr: float) -> None:
         """
-        Function that puts the curved waveguids down (it's just a drawing).
+        Function that draws the curved waveguids (directional couplers).
         
-        Args
-        ------
-        ord : which pair of curved wgs to draw
-            ``if True``: first, ``if False``: second
-        x_start : position of first point in `x`
-        x_end : position of last point in `x`
-        corr : correction in `y` direction
+        ---
+        
+        Args:
+            ord (bool): which pair of curved waveguides (WG) to draw
+                
+                > ``if True``: first (Coupling)
+                
+                > ``if False``: second (Splitter)
+        
+            x_start (float): position of first point in ``x``
+            x_end (float): position of last point in ``x``
+            corr (float): correction in ``y`` direction
         """
         
         c1: np.ndarray[float]
@@ -328,98 +385,105 @@ class Interferometer:
             c1, c2 = self.curve(x_start, x_end, mode=False, flip=True, c=corr)
             plt.plot(c1, c2, lw=1, color="blue")
         
-    def draw_external_ps(self, x: int, N: int, ext_ps: Externalphaseshifter,
+    def draw_external_ps(self, x: int, n: int, ext_ps: Externalphaseshifter,
                         used: bool, cl: str = "red",
                         internal: bool = False) -> bool:
         """
-        Function to handle the external phasshifters on the drawing.
+        Function to draw the external phasshifters (PS).
         
-        Args
-        ------
-        x (int): current position in x
-        N (int): total number of modes
-        ext_ps (Externalphaseshifter): the external PS (class type)
-        used (bool): whether the selected external PS has been used or not
-        even (bool): whether we're on even or odd diagonal
-        cl (str): color of text
+        ---
+        
+        Args:
+            x (int): current position in ``x``
+            n (int): total number of modes
+            ext_ps (Externalphaseshifter): the external PS
+            used (bool): whether the selected external PS has been used or not
+            even (bool): whether we're on even or odd diagonal
+            cl (str): color of text
+            
+        Returns
+        ---
+            A boolean representing the state of the current PS.
+            
+        > True means it has been used/drew.
         """
         
         if not used:
             used = True
             if not internal:
                 # EXTERNAL PS on the edges of the circuit
-                plt.plot((x+0.15, x+0.15), (N-ext_ps.mode-0.3, N-ext_ps.mode+0.2), lw=1, color="blue")
-                circle = plt.Circle((x+0.15, N-ext_ps.mode), 0.1, fill=False)
+                plt.plot((x+0.15, x+0.15), (n-ext_ps.mode-0.3, n-ext_ps.mode+0.2), lw=1, color="blue")
+                circle = plt.Circle((x+0.15, n-ext_ps.mode), 0.1, fill=False)
                 plt.gca().add_patch(circle)
                 phase = "{:2f}".format(ext_ps.phi)
                 if ext_ps.phi > 0:
-                    plt.text(x+0.2, N-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
+                    plt.text(x+0.2, n-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
                 else:
-                    plt.text(x+0.2, N-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
+                    plt.text(x+0.2, n-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
             else:
                 # EXTERNAL PS inside the circuit
-                plt.plot((x+0.85, x+0.85), (N-ext_ps.mode-0.3, N-ext_ps.mode+0.2), lw=1, color="blue")
-                circle = plt.Circle((x+0.85, N-ext_ps.mode), 0.1, fill=False)
+                plt.plot((x+0.85, x+0.85), (n-ext_ps.mode-0.3, n-ext_ps.mode+0.2), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, n-ext_ps.mode), 0.1, fill=False)
                 plt.gca().add_patch(circle)
                 phase = "{:2f}".format(ext_ps.phi)
                 if ext_ps.phi > 0:
-                    plt.text(x+0.9, N-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
+                    plt.text(x+0.9, n-ext_ps.mode-0.3, phase[0:3], color=cl, fontsize=7)
                 else:
-                    plt.text(x+0.9, N-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
+                    plt.text(x+0.9, n-ext_ps.mode-0.3, phase[0:4], color=cl, fontsize=7)
     
         return used
     
-    def draw(self, size: tuple[float, float] | None = None, show_plot: bool = True, save_fig: bool = False):  
+    def draw(self, size: tuple[float, float] | None = None, show_plot: bool = True, save_fig: bool = False) -> None:  
         """
-        Function to make a drawing of the interferometer.
+        Function to draw the circuit including the phaseshift values
+        (in radians) on the PS:s.
+        
+        ---
 
         Args:
-            size (tuple): x and y dimension of plot
+            size (tuple): ``x`` and ``y`` dimension of plot
             show_plot (bool): whether to show the generated plot
+            save_fig (bool): whether to save the figure or not
         """
         
-        N: int = self.num_of_modes
-        mode_tracker: np.ndarray[int] = np.zeros(N)
+        mode_tracker: np.ndarray[float] = np.zeros(self.num_of_modes)
         sc: float = 0.5
         
-        # calling the full source material
-        circuit: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide] = self.circuit_prep()
+        # calling the full source material (array of all elements)
+        circuit = self.circuit_prep()
 
         if size == None:
-            size = (N*2+4, N*2)
+            size = (self.num_of_modes*2 +4, self.num_of_modes*2)
             plt.figure(figsize = size)
         else:
             plt.figure(figsize = size)
 
         # initial/starting lines
         i: int
-        for i in range(1, N+1, 1):
+        for i in range(1, self.num_of_modes+1, 1):
             plt.plot((-1, 0), (i, i), lw=1, color="blue")
 
-        # external and MZIs without outputs
         used: bool = True
         
         for idx in range(len(circuit)):
-            
             elem: Beamsplitter | Externalphaseshifter | Waveguide = circuit[idx]
-
             if isinstance(elem, Externalphaseshifter):
                 used = False
-                x: float = mode_tracker[elem.mode]
+                x = mode_tracker[elem.mode]
                 
                 # initial PS:s
                 if (idx < len(self.input_phases)) or (idx > (len(circuit)-len(self.output_phases)-1)):
-                    used = self.draw_external_ps(x, N, elem, used)
-                    plt.plot((x+0.25, x+0.85), (N-elem.mode, N-elem.mode), lw=1, color="blue")
+                    used = self.draw_external_ps(x, self.num_of_modes, elem, used)
+                    plt.plot((x+0.25, x+0.85), (self.num_of_modes-elem.mode, self.num_of_modes-elem.mode), lw=1, color="blue")
                     # update
                     mode_tracker[elem.mode] = x+0.6
-                    # for alignment in the odd N cases 
-                    if elem.mode == N-2:
+                    # for alignment in the odd modes cases 
+                    if elem.mode == self.num_of_modes-2:
                         mode_tracker[-1] = x+0.6
                         plt.plot((x, x+0.6), (1, 1), lw=1, color="blue")
                 else:
-                    used = self.draw_external_ps(x, N, elem, used, internal=True)
-                    plt.plot((x, x+0.6), (N-elem.mode, N-elem.mode), lw=1, color="blue")
+                    used = self.draw_external_ps(x, self.num_of_modes, elem, used, internal=True)
+                    plt.plot((x, x+0.6), (self.num_of_modes-elem.mode, self.num_of_modes-elem.mode), lw=1, color="blue")
                     # update
                     mode_tracker[elem.mode] = x+0.6
 
@@ -427,103 +491,114 @@ class Interferometer:
                 x: float = np.max([mode_tracker[elem.mode1], mode_tracker[elem.mode2]])
                 
                 if used:
-                    # no external PS to be placed; placeholders
-                    plt.plot((x, x+0.3), (N - elem.mode1, N - elem.mode1), lw=1, color="blue")
-                    plt.plot((x, x+0.3), (N - elem.mode2, N - elem.mode2), lw=1, color="blue")
-                
-                # EXTERNAL PS
-                # used = self.draw_external_ps(x, N, ext_ps, used, even)
+                    # no external PS to be placed; draw placeholders
+                    plt.plot((x, x+0.3), (self.num_of_modes - elem.mode1, self.num_of_modes - elem.mode1), lw=1, color="blue")
+                    plt.plot((x, x+0.3), (self.num_of_modes - elem.mode2, self.num_of_modes - elem.mode2), lw=1, color="blue")
                 
                 # creating curved lines
-                self.draw_curved_connectors(ord=True, x_start=x+0.3, x_end=x+0.5,corr=N-elem.mode1-sc)
-                self.draw_curved_connectors(ord=False, x_start=x+0.5, x_end=x+0.7,corr=N-elem.mode1-sc)
+                self.draw_curved_connectors(ord=True, x_start=x+0.3, x_end=x+0.5,corr=self.num_of_modes-elem.mode1-sc)
+                self.draw_curved_connectors(ord=False, x_start=x+0.5, x_end=x+0.7,corr=self.num_of_modes-elem.mode1-sc)
                 
                 # INTERNAL PS: theta1
-                plt.plot((x+0.85, x+0.85), (N+0.3-(elem.mode2 + elem.mode1)/2., N+0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
-                circle = plt.Circle((x+0.85, N+0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
+                plt.plot((x+0.85, x+0.85), (self.num_of_modes+0.3-(elem.mode2 + elem.mode1)/2., self.num_of_modes+0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, self.num_of_modes+0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
                 plt.gca().add_patch(circle)
                 inter_phase = "{:2f}".format(elem.theta1)
-                plt.text(x+0.9, N+0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
+                plt.text(x+0.9, self.num_of_modes+0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
                 
                 # INTERNAL PS: theta2
-                plt.plot((x+0.85, x+0.85), (N-0.3-(elem.mode2 + elem.mode1)/2., N-0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
-                circle = plt.Circle((x+0.85, N-0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
+                plt.plot((x+0.85, x+0.85), (self.num_of_modes-0.3-(elem.mode2 + elem.mode1)/2., self.num_of_modes-0.7-(elem.mode2 + elem.mode1)/2.), lw=1, color="blue")
+                circle = plt.Circle((x+0.85, self.num_of_modes-0.5-(elem.mode2 + elem.mode1)/2.), 0.1, fill=False)
                 plt.gca().add_patch(circle)
                 inter_phase = "{:2f}".format(elem.theta2)
-                plt.text(x+0.9, N-0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
+                plt.text(x+0.9, self.num_of_modes-0.7-(elem.mode2 + elem.mode1)/2, inter_phase[0:3], color="green", fontsize=7)
                 
                 # creating curved lines
-                self.draw_curved_connectors(ord=True, x_start=x+1, x_end=x+1.2,corr=N-elem.mode1-sc)
-                self.draw_curved_connectors(ord=False, x_start=x+1.2, x_end=x+1.4,corr=N-elem.mode1-sc)
+                self.draw_curved_connectors(ord=True, x_start=x+1, x_end=x+1.2, corr=self.num_of_modes-elem.mode1-sc)
+                self.draw_curved_connectors(ord=False, x_start=x+1.2, x_end=x+1.4, corr=self.num_of_modes-elem.mode1-sc)
 
                 # connecting neighbouring cells
-                plt.plot((x+1.4, x+2), (N-elem.mode1, N-elem.mode1), lw=1, color="blue")
-                plt.plot((x+1.4, x+2), (N-elem.mode2, N-elem.mode2), lw=1, color="blue")
+                plt.plot((x+1.4, x+2), (self.num_of_modes-elem.mode1, self.num_of_modes-elem.mode1), lw=1, color="blue")
+                plt.plot((x+1.4, x+2), (self.num_of_modes-elem.mode2, self.num_of_modes-elem.mode2), lw=1, color="blue")
                 
-                # update
+                # update and draw lines of modes otherwise left empty
                 if x > mode_tracker[elem.mode1]:
-                    plt.plot((mode_tracker[elem.mode1], x), (N-elem.mode1, N-elem.mode1), lw=1, color="blue")
+                    plt.plot((mode_tracker[elem.mode1], x), (self.num_of_modes-elem.mode1, self.num_of_modes-elem.mode1), lw=1, color="blue")
                 if x > mode_tracker[elem.mode2]:
-                    plt.plot((mode_tracker[elem.mode2], x), (N-elem.mode2, N-elem.mode2), lw=1, color="blue")
+                    plt.plot((mode_tracker[elem.mode2], x), (self.num_of_modes-elem.mode2, self.num_of_modes-elem.mode2), lw=1, color="blue")
                 mode_tracker[elem.mode1] = x+2
                 mode_tracker[elem.mode2] = x+2
 
         max_x: float = np.max(mode_tracker)
-        ii: int
-        for ii in range(N):
-            plt.plot((mode_tracker[ii], max_x+1), (N-ii, N-ii), lw=1, color="blue")
+        i: int
+        for i in range(self.num_of_modes):
+            plt.plot((mode_tracker[i], max_x+1), (self.num_of_modes-i, self.num_of_modes-i), lw=1, color="blue")
 
-        plt.text(max_x/3, N+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
-        plt.text(max_x/3, N+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
-        # plt.text(max_x/3, N+1-0.5, r"brown: external phase shift ($\theta$)", color="brown", fontsize=10)
-        plt.text(-1, N+0.2, "Light in", fontsize=10)
-        plt.text(max_x+0.5, N+0.2, "Light out", fontsize=10)
-        plt.gca().axes.set_ylim([0.2, N+1.2])
+        plt.text(max_x/3, self.num_of_modes+1, r"red: external phase shift ($\phi$)", color="red", fontsize=10)
+        plt.text(max_x/3, self.num_of_modes+1-0.25, r"green: internal phase shifts ($\theta_1$,$\theta_2$)", color="green", fontsize=10)
+        plt.text(-1, self.num_of_modes+0.2, "Light in", fontsize=10)
+        plt.text(max_x+0.5, self.num_of_modes+0.2, "Light out", fontsize=10)
+        plt.gca().axes.set_ylim([0.2, self.num_of_modes+1.2])
         plt.axis("off")
         
         if save_fig:
-            plt.savefig("{}_{}-circuit.png".format(N,N))
+            plt.savefig("{}_{}-circuit.png".format(self.num_of_modes, self.num_of_modes))
         if show_plot:
             plt.show()
 
 class AnsysCircuit:
     """
     This class is responsible for building the Integrated Optical
-    Circuit using Ansys Interconnect based on the Unitary Decomposition.
+    Circuit based on the Unitary Decomposition in Ansys Interconnect.
+    
+    ---
     
     Args:
         num_of_modes (int): total number of modes/dimension of Unitary matrix
         list_of_elements (np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]): a list of all the elements in the circuit
+    
+    ---
+    
+    Notes
+    ---
+    In addition, the ``AnsysCircuit`` class contains the following parameter:
+    - ``missing_elements``: A list of the compound elements that are not located
+        in the Ansys custom elements library.
     """
     
     # include ANSYS
     import sys, os
+    # Note: This path may very for users, therefore
+    # Todo: Update to find path corresponding to limerical
     sys.path.append("D:\\lumerical\\api\\python")
     sys.path.append(os.path.abspath(""))
-    from lumapi import INTERCONNECT
 
     def __init__(self, num_of_modes: int,
                 list_of_elements: np.ndarray[Beamsplitter | Externalphaseshifter | Waveguide]):
         
-        self.N = num_of_modes
+        self.num_of_modes = num_of_modes
         self.elements = list_of_elements
         self.missing_elements: list = []
 
-    def check_lib(self) -> list[str]:
+    def check_lib(self, interconnect) -> None:
         """
-        Function to check if custom compounds are present or not.
+        Function to check if custom compounds are present in Ansys
+        custom elements folder or not.
 
         ---
 
-        Notes:
+        Notes
         ---
-        >>> if all elements exist: return an empty list
-        >>> if some exists: return a list of the nonexisting elements (to build later)
-        >>> if the folder is empty or it does not exist: return a list of all the elements to be built
+        Nothing is returned but sets the property ``missing_elements``
+        of class ``AnsysCircuit`` according to the following:
+        
+        - if all elements exist: return an empty list
+        - if some exists: return a list of the nonexisting elements (to build later)
+        - if the folder is empty or it does not exist: return a list of all the elements to be built
         """
         
         # get path of the custom elements
-        ic = self.INTERCONNECT(hide=True)
+        ic = interconnect(hide=True)
         path: str = ic.customlibrary()
         path += "/Bell kits"    # name of the folder in which this code saves custom elements
         list_of_elem_names: list[str] = ["sMZI.ice", "Ext_PS.ice", "WG.ice"]
@@ -537,27 +612,30 @@ class AnsysCircuit:
                 else:
                     missing_elements = [elem for elem in list_of_elem_names if elem not in dirlist]
         
+        # set class property
         self.missing_elements = missing_elements
 
-    def build_compounds(self):
+    def build_compounds(self) -> None:
         """
-        Function to build missing compund elements.
-
+        Function to build missing compound elements in Ansys Interconnect.
+        
+        ---
+        
+        Acronyms of the components:
         - Straight Waveguide (WG)
         - External Phase Shifter (Ext_PS)
         - symmetric Mach-Zehnder Interferometer (sMZI)
 
         ---
 
-        Evaluates Ansys script.
+        Evaluates Ansys script that builds the missing elements based on the
+        ``missing_elements`` property of the class ``AnsysCircuit``.
         """
 
-        ic = self.INTERCONNECT(hide=True)
         script: str = "groupscope('::Root Element');\n"
 
-        if "WG.ice" in self.missing_elements:
-            print("building WG")
-            # create compound: Straight Waveguide
+        if "WG.ice" in self.missing_elements:   # create compound: Straight Waveguide
+            print("Building WG")
             compound_name: str = 'WG'
             wave_guide_element: str = 'Straight Waveguide'
             x_spacing: int = 200
@@ -591,12 +669,9 @@ class AnsysCircuit:
                     + "addtolibrary('Bell kits');\n"\
                     + "deleteall;\n"
 
-        if "Ext_PS.ice" in self.missing_elements:
-            # create compound: External Phase Shifter
-            print("building Ext_PS")
+        if "Ext_PS.ice" in self.missing_elements:   # create compound: External Phase Shifter
+            print("Building Ext_PS")
             compound_name: str = 'Ext_PS'
-            input_name: str = 'input'
-            output_name: str = 'output'
             phase_shift_element: str = 'Optical Phase Shift'
             wave_guide_element: str = 'Straight Waveguide'
             x_spacing: int = 200
@@ -640,12 +715,9 @@ class AnsysCircuit:
                     + "addtolibrary('Bell kits');\n"\
                     + "deleteall;\n"
 
-        if "sMZI.ice" in self.missing_elements:
-            # create compound: symmetric Mach-Zehnder Interferometer
-            print("building sMZI")
+        if "sMZI.ice" in self.missing_elements: # create compound: symmetric Mach-Zehnder Interferometer
+            print("Building sMZI")
             compound_name: str = 'sMZI'
-            input_name: str = 'input'
-            output_name: str = 'output'
             phase_shift_element: str = 'Optical Phase Shift'
             coupler_element: str = 'Waveguide Coupler'
             x_spacing: int = 200
@@ -709,21 +781,38 @@ class AnsysCircuit:
                     + "addtolibrary('Bell kits');\n"\
                     + "deleteall;\n"
 
+        # build elements
+        ic = self.INTERCONNECT(hide=True)
         ic.eval(script)
 
     def build_WGD(self, ID: int, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
         """
-        Function to build Straight Waveguides.
+        Function to build Straight Waveguides and connect to the prior
+        element in the circuit with the defined port.
+        
+        ---
 
         Args:
-            ID (int): serial number of this element
+            ID (int): serial number of current element
             prior_elem (str): name of the element to connect this with
-            port (int): serial number of ``prior_elem``:s port to connect this element's port with
+            port (int): serial number of ``prior_elem``'s port to connect this element's port with
             x (int): ``x`` position of element
             y (int): ``y`` position of element
 
-        Returns:
-            Ansys script to evaluate.
+        Returns
+        ---
+            Ansys script to evaluate together with the name of this element.
+            
+        ---
+        
+        Notes
+        ---
+            Connection to ``prior_elem`` is to be thought of according to the following
+            schematic where it is important to note that we connect the new elements
+            to the previous ones on the left (located in the previous column of the
+            circuit).
+            
+        > |``prior_elem``|--(``port``)--|``WGD``|
         """
         # might be unnecessary
         element_name: str = "WG"
@@ -738,9 +827,6 @@ class AnsysCircuit:
             # if port is not None
             # NOTE: port = 0 would also skip this statement but
             # we name ports by counting from 1
-            # NOTE: in these cases (mainly input and output)
-            # we need to also carefully redefine the waveguides
-            # in these compund elements
             port: str = "port_" + str(port)
             script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
         
@@ -748,20 +834,34 @@ class AnsysCircuit:
 
     def build_Ext_PS(self, ID: int, phi: float, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
         """
-        Function to build an external PhaseShifter with
-        defined phase (in rad) and connected to the prior
+        Function to build an external phaseshifter (PS) with
+        defined phase (in radian) and connect to the prior
         element in the circuit with the defined port.
         
+        ---
+        
         Args:
-            ID (int): serial number of this element
-            phi (float): value of phase shift
+            ID (int): serial number of current element
+            phi (float): value of phase shift (in radian)
             prior_elem (str): name of the element to connect this with
-            port (int): serial number of ``prior_elem``:s port to connect this element's port with
+            port (int): serial number of ``prior_elem``'s port to connect this element's port with
             x (int): ``x`` position of element
             y (int): ``y`` position of element
 
-        Returns:
-            Ansys script to evaluate.
+        Returns
+        ---
+            Ansys script to evaluate together with the name of this element.
+            
+        ---
+        
+        Notes
+        ---
+            Connection to ``prior_elem`` is to be thought of according to the following
+            schematic where it is important to note that we connect the new elements
+            to the previous ones on the left (located in the previous column of the
+            circuit).
+            
+        > |``prior_elem``|--(``port``)--|``Ext_PS``|
         """
         element_name: str = "Ext_PS"
         element_ID: str = "PS_" + str(ID)
@@ -777,9 +877,6 @@ class AnsysCircuit:
             # if port is not None
             # NOTE: port = 0 would also skip this statement but
             # we name ports by counting from 1
-            # NOTE: in these cases (mainly input and output)
-            # we need to also carefully redefine the waveguides
-            # in these compund elements
             port: str = "port_" + str(port)
             script += "connect('"+prior_elem+"','"+port+"','"+element_ID+"','port_1');"
         
@@ -790,8 +887,10 @@ class AnsysCircuit:
                 port_1: int = None, port_2: int = None) -> tuple[str, str]:
         """
         Function to build a Symmetric Mach-Zehnder Interferometer (sMZI) with
-        defined phaseshifts (in rad) and connected to the prior
+        defined phaseshifts (in radian) and connect to the prior
         elements in the circuit with the defined ports.
+        
+        ---
 
         Args:
             ID (int): serial number of this element
@@ -799,15 +898,31 @@ class AnsysCircuit:
             theta_2 (float): value of phase shift on second(/lower) arm
             prior_elem_1 (str): name of the element to connect the upper first(/upper) arm with
             prior_elem_2 (str): name of the element to connect the upper second(/lower) arm with
-            port_1 (int): serial number of ``prior_elem_1``:s port to connect this element's
+            port_1 (int): serial number of ``prior_elem_1``'s port to connect this element's
                 first(/upper) port with
-            port_2 (int): serial number of ``prior_elem_2``:s port to connect this element's
+            port_2 (int): serial number of ``prior_elem_2``'s port to connect this element's
                 second(/lower) port with
             x (int): ``x`` position of element
             y (int): ``y`` position of element
 
-        Returns:
-            Ansys script to evaluate.
+        Returns
+        ---
+            Ansys script to evaluate together with the name of this element.
+            
+        ---
+        
+        Notes
+        ---
+            Connection to ``prior_elem`` is to be thought of according to the following
+            schematic where it is important to note that we connect the new elements
+            to the previous ones on the left (located in the previous column of the
+            circuit).
+            
+        > |``prior_elem_1``|--(``port_1``)--v
+
+                                                >==|``sMZI``|
+
+        > |``prior_elem_2``|--(``port_2``)--^
         """
         element_name: str = "sMZI"
         element_ID: str = "sMZI_" + str(ID)
@@ -826,9 +941,6 @@ class AnsysCircuit:
             # if port is not None
             # NOTE: port = 0 would also skip this statement but
             # we name ports by counting from 1
-            # NOTE: in these cases (mainly input and output)
-            # we need to also carefully redefine the waveguides
-            # in these compund elements
             port: str = "port_" + str(port_1)
             script += "connect('"+prior_elem_1+"','"+port+"','"+element_ID+"','port_1');"
         if port_2:
@@ -838,26 +950,31 @@ class AnsysCircuit:
         return script, element_ID
 
 
-    def build_Circuit(self):
+    def build_Circuit(self) -> None:
         """
-        Function to build the integrated optical circuit, in Ansys Interconnect,
-        that returns the Unitary operation defined by the user.
+        Function to build the integrated optical circuit, in Ansys Interconnect
+        that implements the Unitary operation given by the user based on
+        the scheme by B.A. Bell et al.
 
         ---
 
         Saves the circuit in ``.icp`` format for Ansys to open.
 
         """
+        
+        # include ANSYS
+        from lumapi import INTERCONNECT
+        
         # Pre-checks:
-        self.check_lib()
+        self.check_lib(INTERCONNECT)
         if self.missing_elements:
-            print("Building elements first:",self.missing_elements)
+            print("Building elements first:", self.missing_elements)
             self.build_compounds()
             print("Necessarry compounds have been built!")
         
-        # (name of element, port of element on its right, id of column)
-        circuit_map: dict[tuple[None | int, None | int, None | int]] = dict.fromkeys(np.arange(0, self.N, 1),(None, None, 0))
-        input_connect: list[str] = []   # list of element's name in the first column
+        # structure: (name of element, port of element on its right, id of column)
+        circuit_map: dict[tuple[None | int, None | int, None | int]] = dict.fromkeys(np.arange(0, self.num_of_modes, 1),(None, None, 0))
+        input_connect: list[str] = []   # list of elements' name in the first column of the circuit
         eval_string: str = "groupscope('::Root Element');"
         wgd_id: int = 0
         ps_id: int = 0
@@ -868,47 +985,50 @@ class AnsysCircuit:
         elem: Beamsplitter | Externalphaseshifter | Waveguide
         for elem in self.elements:
             if isinstance(elem, Waveguide):
-                if circuit_map[elem.mode]:  # if the first column of the circuit is set already
-                    script, name = self.build_WGD(wgd_id,
-                                                circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
-                                                circuit_map[elem.mode][0], circuit_map[elem.mode][1])
-                    # update dictionary and input_connect
-                    if not circuit_map[elem.mode][0]:
-                        input_connect.append(name)
-                    circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
+                # if circuit_map[elem.mode]:
+                script, name = self.build_WGD(wgd_id,
+                                            circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
+                                            circuit_map[elem.mode][0], circuit_map[elem.mode][1])
+                # update dictionary and input_connect
+                if not circuit_map[elem.mode][0]:
+                    input_connect.append(name)
+                circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
                 eval_string += script
                 wgd_id += 1
             elif isinstance(elem, Externalphaseshifter):
-                if circuit_map[elem.mode]:  # if the first column of the circuit is set already
-                    script, name = self.build_Ext_PS(ps_id, elem.phi,
-                                                    circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
-                                                    circuit_map[elem.mode][0], circuit_map[elem.mode][1])
-                    # update dictionary
-                    if not circuit_map[elem.mode][0]:
-                        input_connect.append(name)
-                    circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
+                # if circuit_map[elem.mode]:
+                script, name = self.build_Ext_PS(ps_id, elem.phi,
+                                                circuit_map[elem.mode][2]*x_spacing, elem.mode*y_spacing,
+                                                circuit_map[elem.mode][0], circuit_map[elem.mode][1])
+                # update dictionary and input_connect
+                if not circuit_map[elem.mode][0]:
+                    input_connect.append(name)
+                circuit_map[elem.mode] = (name, 2, circuit_map[elem.mode][2] + 1)
                 eval_string += script
                 ps_id += 1
             elif isinstance(elem, Beamsplitter):
-                if circuit_map[elem.mode1] or circuit_map[elem.mode2]:  # if the first column of the circuit  is set already
-                    if circuit_map[elem.mode1][2] > circuit_map[elem.mode2][2]:
-                        x = circuit_map[elem.mode1][2]
-                    else:
-                        x = circuit_map[elem.mode2][2]
-                    script, name =  self.build_sMZI(smzi_id, elem.theta1, elem.theta2,
-                                            x*x_spacing, (elem.mode1 + elem.mode2)*0.5*y_spacing,
-                                            circuit_map[elem.mode1][0], circuit_map[elem.mode2][0],
-                                            circuit_map[elem.mode1][1], circuit_map[elem.mode2][1])
-                    # update dictionary
-                    circuit_map[elem.mode1] = (name, 3, x + 1)
-                    circuit_map[elem.mode2] = (name, 4, x + 1)
+                # if circuit_map[elem.mode1] or circuit_map[elem.mode2]:
+                # choose correct column (x position)
+                if circuit_map[elem.mode1][2] > circuit_map[elem.mode2][2]:
+                    x = circuit_map[elem.mode1][2]
+                else:
+                    x = circuit_map[elem.mode2][2]
+                
+                script, name =  self.build_sMZI(smzi_id, elem.theta1, elem.theta2,
+                                        x*x_spacing, (elem.mode1 + elem.mode2)*0.5*y_spacing,
+                                        circuit_map[elem.mode1][0], circuit_map[elem.mode2][0],
+                                        circuit_map[elem.mode1][1], circuit_map[elem.mode2][1])
+                # update dictionary; input_name is irrelevant since first column never
+                # includes sMZI elements due to design
+                circuit_map[elem.mode1] = (name, 3, x + 1)
+                circuit_map[elem.mode2] = (name, 4, x + 1)
                 eval_string += script
                 smzi_id += 1
             else:
-                print(f"Error! Element type is incorrect at index position: {ps_id+smzi_id}")
+                print(f"Error! Element of type {type(elem)} is incorrect at index position: {ps_id+smzi_id}")
         
         # Finaly, compactify circuit
-        circuit_name = f"U_{self.N}x{self.N}"
+        circuit_name = f"U_{self.num_of_modes}x{self.num_of_modes}"
         input_name = "input"
         output_name = "output"
 
@@ -918,16 +1038,15 @@ class AnsysCircuit:
                     + "set('prefix','"+str(circuit_name)+"');\n"\
                     + "set('description','Integrated photonical representation of decomposed "+str(circuit_name)+" matrix based on scheme by Bell et.al.');\n"
         
-        port_pos: float = 1/(self.N+1)
-        for id in range(1, self.N+1, 1):
+        port_pos: float = 1/(self.num_of_modes+1)
+        for id in range(1, self.num_of_modes+1, 1):
             eval_string += "addport('"+str(circuit_name)+"','"+input_name+"_"+str(id)+"', 'bidirectional', 'Optical Signal', 'left',"+str(port_pos*id)+");\n"\
                     + "addport('"+str(circuit_name)+"','"+output_name+"_"+str(id)+"', 'bidirectional', 'Optical Signal', 'right',"+str(port_pos*id)+");\n"
         
         eval_string += "groupscope('::Root Element::"+circuit_name+"');\n"
-        for i in range(1,self.N+1,1):   # input RELAY connections
+        for i in range(1,self.num_of_modes+1, 1):   # input RELAY connections
             rel_idx_in = 2*i-1
             rel_idx_out = i*2
-
             # input ports
             eval_string += "select('RELAY_"+str(rel_idx_in)+"');\n"\
                         + "set('name','input_"+str(i)+"');\n"\
@@ -946,27 +1065,43 @@ class AnsysCircuit:
         # evaluate complete circuit
         ic = self.INTERCONNECT(hide=True)
         ic.eval(eval_string)
-        ic.save(f"{self.N}x{self.N}_test.icp")
+        ic.save(f"{self.num_of_modes}x{self.num_of_modes}_test.icp")
 
         # return eval_string
 
-
+# -----------------------------
 
 def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
     """
-    Returns a rectangular mesh of beam splitters implementing matrix U.
+    This function implements the Unitary matrix decomposition based on
+    the paper:
+    
+    **B.A. Bell et al.: Further Compactifying Linear Optical Unitaries**
+
+    ---
+    
+    Introduction
+    ---
+        It includes (symmetric) Mach-Zehnder Interferometers (sMZI) with two phasehifters
+        on both of their arms and phaseshifter outside of the sMZI:s. The matrix is decoded
+        in a symmetric rectangular circuit.
     
     ---
-
-    This code implements the decomposition algorithm in:
     
-
-    Returns:
-        an Interferometer instance
+    Returns
+    ---
+        An Interferometer instance that enables further work
+        such as testing the success of the decomposition
+        (``Interferometer.calculate_transformation``) and
+        the creation of a drawing of the circuit
+        (``Interferometer.draw``).
+        The result of ``Interferometer.circuit_prep`` can
+        be used in the class ``AnsysCircuit`` to prepare
+        the same circuit for simulations.
     """
     m: int = U.shape[0]    # dimension of matrix = number of modes 'm'
-    I: Interferometer = Interferometer(num_of_modes = m)
-    V: np.ndarray[float | complex] = np.conjugate(U)
+    Itf: Interferometer = Interferometer(num_of_modes = m)
+    V_mat: np.ndarray[float | complex] = np.conjugate(U)
     
     j: int
     for j in range(1, m): # odd diags: 1,3,5...
@@ -975,37 +1110,37 @@ def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
             y: int = j-1
             s: int = y+1 #place of the external phase shift P 
             # find external phaseshift that matches given elements' phases
-            P, phi = external_ps(m, s, V[x,y], V[x,y+1])
-            V = np.matmul(V,P)
-            I.input_phases = np.append(I.input_phases, Externalphaseshifter(s, phi))
+            P_mat, phi = external_ps(m, s, V_mat[x, y], V_mat[x, y+1])
+            V_mat = np.matmul(V_mat, P_mat)
+            Itf.input_phases = np.append(Itf.input_phases, Externalphaseshifter(s, phi))
             
             k: int
             for k in range(1, j+1):
                 modes: list[int] = [y, y+1]    # initial mode-pairs
-                delta = custom_arctan(V[x,y+1], V[x,y])
+                delta = custom_arctan(V_mat[x, y+1], V_mat[x, y])
                 
                 if k == j:  # redundant choice
                     summ: float = 0
                 else:   # derivation shows
-                    summ: float = np.angle(V[x-1,y-1]) - np.angle(V[x-1,y]*np.sin(delta) + V[x-1,y+1]*np.cos(delta))
+                    summ: float = np.angle(V_mat[x-1, y-1]) - np.angle(V_mat[x-1, y]*np.sin(delta) + V_mat[x-1, y+1]*np.cos(delta))
                 
-                M = np.eye(m, dtype=np.complex128)
-                M[modes[0],modes[0]] =  np.sin(delta) * np.exp(1j*summ)
-                M[modes[1],modes[0]] =  np.cos(delta) * np.exp(1j*summ)
-                M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
-                M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
-                V = np.matmul(V,M)
+                M_mat = np.eye(m, dtype=np.complex128)
+                M_mat[modes[0], modes[0]] =  np.sin(delta) * np.exp(1j*summ)
+                M_mat[modes[1], modes[0]] =  np.cos(delta) * np.exp(1j*summ)
+                M_mat[modes[0], modes[1]] =  np.cos(delta) * np.exp(1j*summ)
+                M_mat[modes[1], modes[1]] = -np.sin(delta) * np.exp(1j*summ)
+                V_mat = np.matmul(V_mat, M_mat)
                 
                 theta1, theta2 = internal_phases(delta, summ)
                 
                 #save the angles in the matrix circuit to easily read where to put which phase
                 a, b = MZI_layer_coord(m, modes, j, k)
-                I.circuit[a,b] = theta1
-                I.circuit[a,b+1] = theta2
+                Itf.circuit[a, b] = theta1
+                Itf.circuit[a, b+1] = theta2
                 
-                if a not in I.mzi_list.keys():
-                    I.mzi_list[a] = []
-                I.mzi_list[a].append((b, b+1))
+                if a not in Itf.mzi_list.keys():
+                    Itf.mzi_list[a] = []
+                Itf.mzi_list[a].append((b, b+1))
                 
                 # update coordinates
                 x -= 1
@@ -1016,163 +1151,189 @@ def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
             y: int = 0
             s: int = x-1 #place of the external phase shift P
             
-            P, phi = external_ps(m, s, V[x,y], V[x-1,y])
-            V = np.matmul(P, V)
-            I.output_phases = np.append(I.output_phases,Externalphaseshifter(s, phi))
+            P_mat, phi = external_ps(m, s, V_mat[x, y], V_mat[x-1, y])
+            V_mat = np.matmul(P_mat, V_mat)
+            Itf.output_phases = np.append(Itf.output_phases,Externalphaseshifter(s, phi))
             
             k: int
             for k in range(1, j+1):
                 modes: list[int] = [x-1, x]     # initial mode-pairs
-                delta = custom_arctan(-V[x-1,y], V[x,y])
+                delta = custom_arctan(-V_mat[x-1, y], V_mat[x, y])
                 
                 if k == j:
                     summ: float = 0
                 else:
-                    summ: float = np.angle(V[x+1,y+1]) - np.angle(V[x-1,y+1]*np.cos(delta) - V[x,y+1]*np.sin(delta))
+                    summ: float = np.angle(V_mat[x+1, y+1]) - np.angle(V_mat[x-1, y+1]*np.cos(delta) - V_mat[x, y+1]*np.sin(delta))
                 
-                M = np.eye(m, dtype=np.complex128)
-                M[modes[0],modes[0]] =  np.sin(delta) * np.exp(1j*summ)
-                M[modes[1],modes[0]] =  np.cos(delta) * np.exp(1j*summ)
-                M[modes[0],modes[1]] =  np.cos(delta) * np.exp(1j*summ)
-                M[modes[1],modes[1]] = -np.sin(delta) * np.exp(1j*summ)
-                V = np.matmul(M,V)
+                M_mat = np.eye(m, dtype=np.complex128)
+                M_mat[modes[0], modes[0]] =  np.sin(delta) * np.exp(1j*summ)
+                M_mat[modes[1], modes[0]] =  np.cos(delta) * np.exp(1j*summ)
+                M_mat[modes[0], modes[1]] =  np.cos(delta) * np.exp(1j*summ)
+                M_mat[modes[1], modes[1]] = -np.sin(delta) * np.exp(1j*summ)
+                V_mat = np.matmul(M_mat,V_mat)
                 
                 #calculate the actual phases theta1 and theta2
-                theta1, theta2 = internal_phases(delta,summ)
+                theta1, theta2 = internal_phases(delta, summ)
                 
                 #save the angles in the matrix circuit to easily read where to put which phase
-                a, b = MZI_layer_coord(m,modes,j,k)
-                I.circuit[a,b] = theta1
-                I.circuit[a,b+1] = theta2
+                a, b = MZI_layer_coord(m, modes, j, k)
+                Itf.circuit[a, b] = theta1
+                Itf.circuit[a, b+1] = theta2
                 
-                if a not in I.mzi_list.keys():
-                    I.mzi_list[a] = []
-                I.mzi_list[a].append((b,b+1))
+                if a not in Itf.mzi_list.keys():
+                    Itf.mzi_list[a] = []
+                Itf.mzi_list[a].append((b, b+1))
                 
                 # update coordinates
                 x += 1
                 y += 1
 
 
-    #add step 3 of the algorithm that implements the external phases in the middle of the cicuit
-    #in addiditon we now want to move the external phases Q to the residual positions
-    
-    #this phase shift on the first mode ensures that we implement the actual unitary U, without global phase, 
-    #however, for now we don't use it
-    #V = np.dot(V,external_ps(m, 0, 0, V[0,0]))
+    # Step 3 of the algorithm that implements the external phases in the middle of the circuit
+    # in addiditon, we now want to move the external phases 'Q' to the residual positions.
+    # this phase shift on the first mode ensures that we implement the actual unitary 'U',
+    # without a global phase, however, for now we don't use it
+    # V = np.dot(V,external_ps(m, 0, 0, V[0,0]))
     
     if m%2 != 0: # if the number of modes is odd
         for j in range(2, m+1):
             a: int = m - j
-            P, xi = external_ps(m, j-1, V[0, 0], V[j-1, j-1])
-            V = np.dot(V, P)
+            P_mat, xi = external_ps(m, j-1, V_mat[0, 0], V_mat[j-1, j-1])
+            V_mat = np.dot(V_mat, P_mat)
    
             if j%2 != 0: #if j is odd        
-                for b in range(j-1,m):
-                    I.circuit[a, b] = I.circuit[a, b] + xi
-                for b in range(j,m):
-                    I.circuit[a-1, b] = I.circuit[a-1, b] - xi
+                for b in range(j-1, m):
+                    Itf.circuit[a, b] = Itf.circuit[a, b] + xi
+                for b in range(j, m):
+                    Itf.circuit[a-1, b] = Itf.circuit[a-1, b] - xi
                 
             else: #if j is even           
                 for b in range(j):
-                    I.circuit[a-1, b] = I.circuit[a-1, b] + xi
+                    Itf.circuit[a-1, b] = Itf.circuit[a-1, b] + xi
                 for b in range(j-1):
-                    I.circuit[a, b] = I.circuit[a, b] - xi
+                    Itf.circuit[a, b] = Itf.circuit[a, b] - xi
             
     else: #for even m
         for j in range(2, m+1):
             a: int = m - j
-            P, xi = external_ps(m, j-1, V[0, 0], V[j-1, j-1])
-            V = np.dot(V, P)
+            P_mat, xi = external_ps(m, j-1, V_mat[0, 0], V_mat[j-1, j-1])
+            V_mat = np.dot(V_mat, P_mat)
    
             if j%2 != 0: #if j is odd        
                 for b in range(j):
-                    I.circuit[a, b] = I.circuit[a, b] + xi
+                    Itf.circuit[a, b] = Itf.circuit[a, b] + xi
                 for b in range(j-1):
-                    I.circuit[a+1, b] = I.circuit[a+1, b] - xi
+                    Itf.circuit[a+1, b] = Itf.circuit[a+1, b] - xi
                     
             else: #if j is even           
                 for b in range(j-1, m):
-                    I.circuit[a+1, b] = I.circuit[a+1, b] + xi
+                    Itf.circuit[a+1, b] = Itf.circuit[a+1, b] + xi
                 for b in range(j, m):
-                    I.circuit[a, b] = I.circuit[a, b] - xi
+                    Itf.circuit[a, b] = Itf.circuit[a, b] - xi
 
-    I.circuit = I.circuit.T
-    I.mzi_list = dict(sorted(I.mzi_list.items()))
+    Itf.circuit = Itf.circuit.T
+    Itf.mzi_list = dict(sorted(Itf.mzi_list.items()))
     
-    return I
+    return Itf
 
 
-def random_unitary(N: int) -> np.ndarray[complex]:
+def random_unitary(n: int) -> np.ndarray[complex]:
     """
-    Returns a random NxN unitary matrix
+    Returns a random NxN unitary matrix.
 
-    This code is inspired by Matlab code written by Toby Cubitt:
+    This code is inspired by the Matlab code written by Toby Cubitt:
     http://www.dr-qubit.org/matlab/randU.m
 
-    Args:
-        N (int): dimension of the NxN unitary matrix to generate
+    ---
 
-    Returns:
+    Args:
+        n (int): dimension of the NxN unitary matrix to generate
+
+    ---
+
+    Returns
+    ---
         complex-valued 2D numpy array representing the interferometer
     """
-    X: np.ndarray[complex] = np.zeros([N, N], dtype=np.complex128)
-    ii: int
-    jj: int
-    for ii in range(N):
-        for jj in range(N):
-            X[ii, jj] = (np.random.normal() + 1j * np.random.normal()) / np.sqrt(2)
+    X_mat: np.ndarray[complex] = np.zeros([n, n], dtype=np.complex128)
+    i: int
+    j: int
+    for i in range(n):
+        for j in range(n):
+            X_mat[i, j] = (np.random.normal() + 1j * np.random.normal()) / np.sqrt(2)
 
     q: np.ndarray[complex]
     r: np.ndarray[complex]
-    q, r = np.linalg.qr(X)
+    q, r = np.linalg.qr(X_mat)
     r = np.diag(np.divide(np.diag(r), abs(np.diag(r))))
-    U = np.matmul(q, r)
+    U_mat = np.matmul(q, r)
 
-    return U
+    return U_mat
 
-def external_ps(N: int, mode: int, V1: complex, V2: complex) -> tuple[np.ndarray[complex], float]:
+def external_ps(n: int, mode: int, v1: complex, v2: complex) -> tuple[np.ndarray[complex], float]:
     """
-    Builds the external phase-shifter for the given diagonal.
+    Builds the representation of the external phaseshifter
+    for the given diagonal.
     Purpose of this operator is to match the given elements'
     phases.
     
-    Parameters
-    ------
-    N : dimension of unitary matrix / number of modes
-    mode : selected "diagonal" / index of mode
-    V1 : element of auxillary matrix
-    V2 : subsequent element of **V1**
+    ---
+    
+    Args:
+        n (int): dimension of unitary matrix / number of modes
+        mode (int): selected "diagonal" / index of mode
+        V1 (complex): element of auxillary matrix
+        V2 (complex): subsequent element of **v1**
     
     ---
     
     - for **even** diagonals ( j=2,4... ):
-    >> ``V1 = V[x,y]`` ,  ``V2 = V[x-1,y]``
+    >> ``v1 = V_mat[x, y]`` ,  ``v2 = V_mat[x-1, y]``
     
     - for **odd** diagonals ( j=1,3... ):
-    >> ``V1 = V[x,y]`` ,  ``V2 = V[x,y+1]``
-    
-    Returns
-    ------
-    Diagonal matrix with phase-shift ``exp(i*phi)``
-    at position ``[j,j]`` and the angle phi itself.
-    """
-    phi = np.angle(V1) - np.angle(V2)
-    P = np.eye(N, dtype=np.complex128)
-    P[mode, mode] = np.exp(1j * phi)
-    
-    return P, phi
-    
-def custom_arctan(V1: float | complex, V2: float | complex) -> float:
-    """
-    Computes the ``arctan`` of ``-V1/V2``.
+    >> ``v1 = V_mat[x, y]`` ,  ``v2 = V_mat[x, y+1]``
     
     ---
-    If ``V2=0`` returns ``pi/2``.
     
+    Returns
+    ---
+        Diagonal matrix with phase-shift ``exp(i*phi)``
+        at position ``[j, j]`` together with the angle ``phi`` itself.
     """
-    if V2 != 0:
-        ang = np.arctan(-V1/V2)
+    phi = np.angle(v1) - np.angle(v2)
+    P_mat = np.eye(n, dtype=np.complex128)
+    P_mat[mode, mode] = np.exp(1j * phi)
+    
+    return P_mat, phi
+    
+def custom_arctan(v1: float | complex, v2: float | complex) -> float:
+    """
+    Computes the ``arctan`` of ``-v1/v2``.
+    
+    If ``v2=0`` returns ``pi/2``.
+    
+    ---
+    
+    Args:
+        v1 (float/complex): subsequent element of **v2**
+        v2 (float/complex): element of auxillary matrix
+        
+    ---
+        
+    - for **even** diagonals ( j=2,4... ):
+    >> ``v1 = -V_mat[x-1, y]`` ,  ``v2 = V_mat[x, y]``
+    
+    - for **odd** diagonals ( j=1,3... ):
+    >> ``v1 = V_mat[x, y+1]`` ,  ``v2 = V_mat[x, y]``
+    
+    ---
+    
+    Returns
+    ---
+        The angle of the arctan in radians.
+    """
+    if v2 != 0:
+        ang: float | complex = np.arctan(-v1/v2)
         if isinstance(ang, np.complex128):
             return np.real(ang)
         else:
@@ -1180,49 +1341,55 @@ def custom_arctan(V1: float | complex, V2: float | complex) -> float:
     else:
         return np.pi/2
     
-def internal_phases(delta: float, summ:float) -> tuple[float, float]:
+def internal_phases(delta: float, summ: float) -> tuple[float, float]:
     """
-    Computes the internal phases theta1 and theta2 
+    Computes the internal phases ``theta1`` and ``theta2`` such that
+    they reproduce ``delta`` and ``summ`` according to
     
-    ------
+    - ``summ = (theta1 + theta2)/2``
+    - ``delta = (theta1 - theta2)/2``
     
-    Parameters
-    ------
-    delta : the angle computed to null the elements
-    summ : the phase computed to equalize the phases
+    In addition we add a phase of ``-pi/2`` to each angle in order to
+    ensure the proper description of the beamsplitter (BS).
+    
+    ---
+    
+    Args:
+        delta (float): the angle computed to null elements
+        summ (float): the phase computed to equalize phases
+    
+    ---
+    
     
     Returns
-    ------
-    The interal phases 'theta1' and 'theta2', that reproduce 'delta' and 'summ' according to
-    summ = (theta1+theta2)/2
-    detla = (theta1-theta2)/2
-    In addition we add a phase -pi/2 to each angle to ensure the proper description of the BS
+    ---
+        The internal phases ``theta1`` and ``theta2``.
     """
     theta1 = delta + summ - np.pi/2
     theta2 = summ - delta - np.pi/2
     
     return theta1, theta2
 
-def MZI_layer_coord(m: int, modes: list, j: int, k: int) -> tuple[int, int]:
+def MZI_layer_coord(m: int, modes: list[int], j: int, k: int) -> tuple[int, int]:
     """
-    Gives new coordinates that define in which vertical layer of the circuit 
-    the corresponding MZI is placed
+    Gives new coordinates that define in which vertical layer (column)
+    of the circuit the corresponding symmetric Mach-Zehnder Interferometer
+    (sMZI) is placed.
     
-    ------
+    ---
     
-    Parameters
-    ------
-    m : the number of modes
-    modes : the modes the MZI is acting on
-    j : the coordinate giving the diagonal of the circuit
-    k : the counter within the diagonal j
+    Args:
+        m (int): the number of modes
+        modes (list): the modes the sMZI is acting on
+        j (int): the coordinate giving the diagonal of the circuit
+        k (int): the counter within the diagonal ``j``
     
     Returns
-    ------
-    New coordinates a and b (starting at 0) that will help to place the MZI in the circiut 
-    and manage the shifting of the external PS Q from the middle of the circuit to the residual positions
+    ---
+        New coordinates ``a`` and ``b`` (starting at 0) that will help to place the MZI in the circuit
+        and manage the shifting of the external PS:s, 'Q', from the middle of the circuit to the residual positions.
     
-    a : the coordinate of the MZI layer
+    a : the coordinate of the sMZI layer (column)
     
     b : the affected mode
     """
@@ -1237,19 +1404,18 @@ def MZI_layer_coord(m: int, modes: list, j: int, k: int) -> tuple[int, int]:
 
 # Functions for re-composition:
 
-def matprod(mat_list: list | np.ndarray) -> np.ndarray:
+def matprod(mat_list: list[np.ndarray] | np.ndarray[np.ndarray]) -> np.ndarray:
     """
-    Computes the product of the matrices in the list
+    Computes the product of the matrices that are in the input list.
     
-    ------
+    ---
     
-    Parameters
-    ------
-    mat_list : a list of matrices that shall be mulitplied in the given order
+    Args:
+        mat_list (list): a list of matrices that shall be mulitplied in the given order
     
     Returns
-    ------
-    A matrix that is the product of all matrices in mat_list
+    ---
+        A matrix that is the product of all matrices in ``mat_list``.
     """
     
     result: np.ndarray = np.eye(mat_list[0].shape[0])
@@ -1257,32 +1423,47 @@ def matprod(mat_list: list | np.ndarray) -> np.ndarray:
         result = np.dot(result, i)
     return result
 
-def BS(m: int, m1: int, m2: int) -> np.ndarray[complex]:
+def BS(n: int, m1: int, m2: int) -> np.ndarray[complex]:
     """
-    Gives a matrix that descibes a 50/50 beam splitter acting on modes m1 and m1 embedded in a mxm matrix
+    This function creates a matrix that descibes a 50/50 beam splitter
+    (BS) acting on modes given modes.
     
-    ------
+    ---
     
-    Parameters
-    ------
-    m : the number of modes
-    m1 : mode 1 the BS acts on
-    m1 : mode 2 the BS acts on
+    Args:
+        n (int): the number of modes
+        m1 (int): mode 1 the BS acts on (upper)
+        m1 (int): mode 2 the BS acts on (lower)
+        
+    ---
+    
     Returns
-    ------
-    An mxm matrix with embedded 50/50 BS on modes m1 and m2
+    ---
+        An ``nxn`` matrix with embedded 50/50 BS on modes ``m1`` and ``m2``.
     """
-    B: np.ndarray[complex] = np.eye(m, dtype=complex)
-    B[m1,m1] = 1/(2**0.5)
-    B[m1,m1+1] = 1j/(2**0.5)
-    B[m2,m2-1] = 1j/(2**0.5)
-    B[m2,m2] = 1/(2**0.5)
     
-    return B
+    BS_mat: np.ndarray[complex] = np.eye(n, dtype=complex)
+    BS_mat[m1, m1] = 1/(2**0.5)
+    BS_mat[m1, m1+1] = 1j/(2**0.5)
+    BS_mat[m2, m2-1] = 1j/(2**0.5)
+    BS_mat[m2, m2] = 1/(2**0.5)
+    
+    return BS_mat
 
 # TODO: main function to serve the user
-# read from input
+# - Add reading from proper input
 def function_to_rule_them_all(unitary_matrix: np.ndarray):
+    """
+    
+    ---
+    
+    Args:
+        unitary_matrix (array): Unitary matrix to decompose and represent
+            in terms of an integrated photonic circuit
+        
+    ---
+    
+    """
     
     I = square_decomposition(unitary_matrix)
     I.calculate_transformation(unitary_matrix)
