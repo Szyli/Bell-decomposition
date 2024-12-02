@@ -472,7 +472,7 @@ class Interferometer:
                 x = mode_tracker[elem.mode]
                 
                 # initial PS:s
-                if (idx < len(self.input_phases)) or (idx > (len(circuit)-len(self.output_phases)-1)):
+                if (idx < self.num_of_modes) or (idx > (len(circuit)-self.num_of_modes-1)):
                     used = self.draw_external_ps(x, self.num_of_modes, elem, used)
                     plt.plot((x+0.25, x+0.85), (self.num_of_modes-elem.mode, self.num_of_modes-elem.mode), lw=1, color="blue")
                     # update
@@ -720,6 +720,8 @@ class AnsysCircuit:
             compound_name: str = 'sMZI'
             phase_shift_element: str = 'Optical Phase Shift'
             coupler_element: str = 'Waveguide Coupler'
+            wave_guide_element: str = 'Straight Waveguide'
+            
             x_spacing: int = 200
             y_spacing: int = 80
 
@@ -727,22 +729,42 @@ class AnsysCircuit:
                     + "set('name','Coupler_1');\n"\
                     + "set('x position', "+str(0)+");\n"\
                     + "set('y position', "+str(y_spacing)+");\n"\
-                    + "addelement('"+str(phase_shift_element)+"');\n"\
-                    + "set('name','Theta_1');\n"\
+                    + "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_1');\n"\
                     + "set('x position', "+str(x_spacing)+");\n"\
                     + "set('y position', "+str(0)+");\n"\
                     + "addelement('"+str(phase_shift_element)+"');\n"\
-                    + "set('name','Theta_2');\n"\
+                    + "set('name','Theta_1');\n"\
+                    + "set('x position', "+str(2*x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_3');\n"\
+                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('y position', "+str(0)+");\n"\
+                    + "connect('WGD_1','port 2','Theta_1','port 1');\n"\
+                    + "connect('WGD_3','port 1','Theta_2','port 2');\n"\
+                    + "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_2');\n"\
                     + "set('x position', "+str(x_spacing)+");\n"\
                     + "set('y position', "+str(2*y_spacing)+");\n"\
-                    + "connect('Coupler_1','port 3','Theta_1','port 1');\n"\
-                    + "connect('Coupler_1','port 4','Theta_2','port 1');\n"\
+                    + "addelement('"+str(phase_shift_element)+"');\n"\
+                    + "set('name','Theta_2');\n"\
+                    + "set('x position', "+str(2*x_spacing)+");\n"\
+                    + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "addelement('"+str(wave_guide_element)+"');\n"\
+                    + "set('name','WGD_4');\n"\
+                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "connect('WGD_2','port 2','Theta_2','port 1');\n"\
+                    + "connect('WGD_4','port 1','Theta_2','port 2');\n"\
                     + "addelement('"+str(coupler_element)+"');\n"\
                     + "set('name','Coupler_2');\n"\
                     + "set('x position', "+str(2*x_spacing)+");\n"\
                     + "set('y position', "+str(y_spacing)+");\n"\
-                    + "connect('Coupler_2','port 1','Theta_1','port 2');\n"\
-                    + "connect('Coupler_2','port 2','Theta_2','port 2');\n"\
+                    + "connect('Coupler_1','port 3','WGD_1','port 1');\n"\
+                    + "connect('Coupler_1','port 4','WGD_2','port 1');\n"\
+                    + "connect('Coupler_2','port 1','WGD_3','port 2');\n"\
+                    + "connect('Coupler_2','port 2','WGD_4','port 2');\n"\
                     + "selectall;\n"\
                     + "createcompound();\n"\
                     + "set('name',"+"'"+str(compound_name)+"');\n"\
@@ -1188,7 +1210,6 @@ def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
                 x += 1
                 y += 1
 
-
     # Step 3 of the algorithm that implements the external phases in the middle of the circuit
     # in addiditon, we now want to move the external phases 'Q' to the residual positions.
     # this phase shift on the first mode ensures that we implement the actual unitary 'U',
@@ -1236,6 +1257,7 @@ def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
     
     return Itf
 
+# -----------------------------
 
 def random_unitary(n: int) -> np.ndarray[complex]:
     """
