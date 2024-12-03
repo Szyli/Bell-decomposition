@@ -9,9 +9,6 @@ sys.path.append(os.path.abspath(""))
 
 from lumapi import MODE
 
-
-
-
 class StraightWGD:
     def __init__(self, base_width,
                 base_height, base_angle,
@@ -30,7 +27,9 @@ class StraightWGD:
                 +"set(\"base height\", "+str(self.height)+");\n"\
                 +"set(\"base angle\", "+str(self.angle)+");\n"\
                 +"set(\"poles\", "+self.pole+");\n"\
-                +"set(\"material\", \""+self.material+"\");\n"
+                +"set(\"material\", \""+self.material+"\");\n"\
+                +"set(\"override mesh order from material database\",1);\n"\
+                +"set(\"mesh order\",1);\n"
         return script
     
 class BentWGD:
@@ -51,16 +50,18 @@ class BentWGD:
                 +"set(\"base height\", "+str(self.height)+");\n"\
                 +"set(\"base angle\", "+str(self.angle)+");\n"\
                 +"set(\"poles\", "+self.pole+");\n"\
-                +"set(\"material\", \""+self.material+"\");\n"
+                +"set(\"material\", \""+self.material+"\");\n"\
+                +"set(\"override mesh order from material database\",1);\n"\
+                +"set(\"mesh order\",1);\n"
         return script
         
 
-def coupler(parent, mode1, mode2,
-            base_width, base_height, base_angle,
+def coupler(parent, mode1, mode2, z_pos,
+            base_height, base_width, base_angle,
             material, y_span, gap,
-            Ls, Lw, Lc, y_pos):
+            Lc, Ls, Lw):
     
-    y_pos = y_pos*1e-6
+    z_pos = z_pos*1e-6
 
     script = "addstructuregroup;\n"\
             +"set('name', '"+parent+"');\n"\
@@ -133,47 +134,73 @@ def coupler(parent, mode1, mode2,
             
     
     script += "select('"+parent+"');\n"\
-            +"set(\"z\", "+str(y_pos)+");\n"
+            +"set(\"z\", "+str(z_pos)+");\n"
 
     return script
 
+def insulator(param: dict, dist, material):
+    
+    script = "addrect;\n"\
+            +"set(\"x min\",0);\n"\
+            +"set(\"x max\","+str(2*param["Lw"]+2*param["Ls"]+param["Lc"])+"*1e-6);\n"\
+            +"set(\"y min\","+str(-param["y span"]/2 - param["base width"]/2)+"*1e-6);\n"\
+            +"set(\"y max\","+str(param["y span"]/2 + param["base width"]/2)+"*1e-6);\n"\
+            +"set(\"z min\","+str(-1)+"*1e-6);"\
+            +"set(\"z max\","+str(dist+1)+"*1e-6);"\
+            +"set(\"material\", \""+material+"\");\n"\
+            +"set('name', 'insulator');\n"
+    
+    return script
 
-def builder():
+
+def dir_coupler_builder(param_1: dict, param_2: dict,
+                        dist: float, material: str) -> None:
+    """
+    Builds directional coupler in triplex scheme.
+    
+    ---
+
+    Args:
+        param_1 (dict): Dictionary of "lower layer" waveguide's parameters
+        param_2 (dict): Dictionary of "upper layer" waveguide's parameters
+        dist (float): distance between the two layers (um)
+    
+    ---
+
+    Note
+    ---
+    parameter keys:
+    > - base height
+    > - base width
+    > - base angle
+    > - material
+    > - y span
+    > - gap
+    > - Lc
+    > - Ls
+    > - Lw
+    """
     # parameters
-    base_height = 0.175
-    base_width = 1.149
-    base_angle = 82
-    material = "Si3N4 (Silicon Nitride) - Luke"
-    y_span = 8
-    gap = 0.4
-    Lc = 3
-    Ls = 5
-    Lw = 3
     # Lc: length of the central straight waveguide sections for coupling
     # Lw: length of the four individual straight waveguide sections 
     #     at the input and output ports
     # Ls: x span of the four individual s-bend sections
     # gap: gap between two coupling sections
     # y_span: center-to-center distance between the two input ports
-    parent1 = "upper layer"
-    parent2 = "lower layer"
+    parent1 = "lower layer"
+    parent2 = "upper layer"
     mode1 = "mode_1"
     mode2 = "mode_2"
 
+    dist = dist + param_1["base height"]/2 + param_2["base height"]/2
+
     script: str = "groupscope('::model');\n"
 
-    script += coupler(parent1,mode1,mode2,
-                    base_width,base_height,base_angle,
-                    material,y_span,gap,Ls,Lw,Lc,0)
+    script += coupler(parent2, mode1, mode2, dist, *param_2.values())
+    script += coupler(parent1, mode1, mode2, 0, *param_1.values())
+    script += insulator(param_1, dist, material)
     
-    script += coupler(parent2,mode1,mode2,
-                    base_width,base_height,base_angle,
-                    material,y_span,gap,Ls,Lw,Lc,0.21385)
-
     
-        
-
-
 
 
     mode = MODE(hide = True)
