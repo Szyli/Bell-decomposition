@@ -615,7 +615,7 @@ class AnsysCircuit:
         # set class property
         self.missing_elements = missing_elements
 
-    def build_compounds(self) -> None:
+    def build_compounds(self, interconnect) -> None:
         """
         Function to build missing compound elements in Ansys Interconnect.
         
@@ -742,7 +742,6 @@ class AnsysCircuit:
                     + "set('x position', "+str(3*x_spacing)+");\n"\
                     + "set('y position', "+str(0)+");\n"\
                     + "connect('WGD_1','port 2','Theta_1','port 1');\n"\
-                    + "connect('WGD_3','port 1','Theta_2','port 2');\n"\
                     + "addelement('"+str(wave_guide_element)+"');\n"\
                     + "set('name','WGD_2');\n"\
                     + "set('x position', "+str(x_spacing)+");\n"\
@@ -751,15 +750,16 @@ class AnsysCircuit:
                     + "set('name','Theta_2');\n"\
                     + "set('x position', "+str(2*x_spacing)+");\n"\
                     + "set('y position', "+str(2*y_spacing)+");\n"\
+                    + "connect('WGD_2','port 2','Theta_2','port 1');\n"\
                     + "addelement('"+str(wave_guide_element)+"');\n"\
                     + "set('name','WGD_4');\n"\
                     + "set('x position', "+str(3*x_spacing)+");\n"\
                     + "set('y position', "+str(2*y_spacing)+");\n"\
-                    + "connect('WGD_2','port 2','Theta_2','port 1');\n"\
+                    + "connect('WGD_3','port 1','Theta_1','port 2');\n"\
                     + "connect('WGD_4','port 1','Theta_2','port 2');\n"\
                     + "addelement('"+str(coupler_element)+"');\n"\
                     + "set('name','Coupler_2');\n"\
-                    + "set('x position', "+str(2*x_spacing)+");\n"\
+                    + "set('x position', "+str(4*x_spacing)+");\n"\
                     + "set('y position', "+str(y_spacing)+");\n"\
                     + "connect('Coupler_1','port 3','WGD_1','port 1');\n"\
                     + "connect('Coupler_1','port 4','WGD_2','port 1');\n"\
@@ -789,12 +789,12 @@ class AnsysCircuit:
                     + "flipelement('Port_2');\n"\
                     + "select('RELAY_3');\n"\
                     + "set('name','Port_3');\n"\
-                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('x position', "+str(5*x_spacing)+");\n"\
                     + "set('y position', "+str(0)+");\n"\
                     + "connect('Port_3','port','Coupler_2','port 3');\n"\
                     + "select('RELAY_4');\n"\
                     + "set('name','Port_4');\n"\
-                    + "set('x position', "+str(3*x_spacing)+");\n"\
+                    + "set('x position', "+str(5*x_spacing)+");\n"\
                     + "set('y position', "+str(2*y_spacing)+");\n"\
                     + "connect('Port_4','port','Coupler_2','port 4');\n"
 
@@ -804,7 +804,7 @@ class AnsysCircuit:
                     + "deleteall;\n"
 
         # build elements
-        ic = self.INTERCONNECT(hide=True)
+        ic = interconnect(hide=True)
         ic.eval(script)
 
     def build_WGD(self, ID: int, x: int, y: int, prior_elem: str = None, port: int = None) -> tuple[str, str]:
@@ -991,7 +991,7 @@ class AnsysCircuit:
         self.check_lib(INTERCONNECT)
         if self.missing_elements:
             print("Building elements first:", self.missing_elements)
-            self.build_compounds()
+            self.build_compounds(INTERCONNECT)
             print("Necessarry compounds have been built!")
         
         # structure: (name of element, port of element on its right, id of column)
@@ -1085,7 +1085,7 @@ class AnsysCircuit:
         
         eval_string += "groupscope('::Root Element');\n"
         # evaluate complete circuit
-        ic = self.INTERCONNECT(hide=True)
+        ic = INTERCONNECT(hide=True)
         ic.eval(eval_string)
         ic.save(f"{self.num_of_modes}x{self.num_of_modes}_test.icp")
 
