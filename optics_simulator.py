@@ -140,6 +140,19 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
     script = "addstructuregroup;\n"\
             +"set('name', '"+parent+"');\n"\
     # mode 1
+
+    # + BentWGD(base_width, base_height,
+    #             base_angle, material,
+    #             "["+str(Lw)+","+str(y_span/2)+";"\
+    #             +str(Lw+Ls/2)+","+str(y_span/2)+";"\
+    #             +str(Lw+Ls/2)+","+str(y_span/4)+"]").builder()\
+    #         +"addtogroup('"+parent+"::"+mode1+"');\n"\
+    # + BentWGD(base_width, base_height,
+    #     base_angle, material,
+    #     "["+str(Lw+Ls/2)+","+str(y_span/4)+";"\
+    #     +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
+    #     +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
+    # +"addtogroup('"+parent+"::"+mode1+"');\n"\
     script += "addstructuregroup;\n"\
             +"set('name', '"+mode1+"');\n"\
             +"addtogroup('"+parent+"');\n"\
@@ -149,11 +162,11 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
                         +str(Lw)+","+str(y_span/2)+"]").builder()\
             +"addtogroup('"+parent+"::"+mode1+"');\n"\
             + BentWGD(base_width, base_height,
-                    base_angle, material,
-                    "["+str(Lw)+","+str(y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str(y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
-                    +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
+                base_angle, material,
+                "["+str(Lw)+","+str(y_span/2)+";"\
+                +str(Lw+Ls/2)+","+str(y_span/2)+";"\
+                +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
+                +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
             +"addtogroup('"+parent+"::"+mode1+"');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
@@ -272,15 +285,15 @@ def eme_simulator(y_span: float, z_span: float,
             (it is a symmetric system therefore, give positive number)
     """
 
-    cell_spans = "["+str(Lw)+";"+str(Ls)+";"+str(Lc)+";"\
-                +str(Ls)+";"+str(Lw)+"]"
+    cell_spans = "["+str(Lw-1)+";"+str(Ls)+";"+str(Lc)+";"\
+                +str(Ls)+";"+str(Lw-1)+"]"
 
     total_length = 2*Lw + 2*Ls + Lc
     total_width = y_span*2
 
     # subcells: 0 = none,  1 = CVCS
     script = "addeme;\n"
-    script += "set(\"x min\", 0);\n"\
+    script += "set(\"x min\", 1*1e-6);\n"\
             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
             +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
