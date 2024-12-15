@@ -140,6 +140,19 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
     script = "addstructuregroup;\n"\
             +"set('name', '"+parent+"');\n"\
     # mode 1
+
+    # + BentWGD(base_width, base_height,
+    #             base_angle, material,
+    #             "["+str(Lw)+","+str(y_span/2)+";"\
+    #             +str(Lw+Ls/2)+","+str(y_span/2)+";"\
+    #             +str(Lw+Ls/2)+","+str(y_span/4)+"]").builder()\
+    #         +"addtogroup('"+parent+"::"+mode1+"');\n"\
+    # + BentWGD(base_width, base_height,
+    #     base_angle, material,
+    #     "["+str(Lw+Ls/2)+","+str(y_span/4)+";"\
+    #     +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
+    #     +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
+    # +"addtogroup('"+parent+"::"+mode1+"');\n"\
     script += "addstructuregroup;\n"\
             +"set('name', '"+mode1+"');\n"\
             +"addtogroup('"+parent+"');\n"\
@@ -149,11 +162,11 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
                         +str(Lw)+","+str(y_span/2)+"]").builder()\
             +"addtogroup('"+parent+"::"+mode1+"');\n"\
             + BentWGD(base_width, base_height,
-                    base_angle, material,
-                    "["+str(Lw)+","+str(y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str(y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
-                    +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
+                base_angle, material,
+                "["+str(Lw)+","+str(y_span/2)+";"\
+                +str(Lw+Ls/2)+","+str(y_span/2)+";"\
+                +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
+                +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
             +"addtogroup('"+parent+"::"+mode1+"');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
@@ -212,6 +225,8 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
 
     return script
 
+
+# change input params for more diverse usage
 def insulator(param: dict, dist: float, material: str) -> str:
     """
     This function prepares a script for Ansys MODE to build
@@ -270,20 +285,26 @@ def eme_simulator(y_span: float, z_span: float,
             (it is a symmetric system therefore, give positive number)
     """
 
-    cell_spans = "["+str(Lw)+";"+str(Ls)+";"+str(Lc)+";"\
-                +str(Ls)+";"+str(Lw)+"]"
+    cell_spans = "["+str(Lw-1)+";"+str(Ls)+";"+str(Lc)+";"\
+                +str(Ls)+";"+str(Lw-1)+"]"
+
+    total_length = 2*Lw + 2*Ls + Lc
+    total_width = y_span*2
 
     # subcells: 0 = none,  1 = CVCS
     script = "addeme;\n"
-    script += "set(\"x min\", 0);\n"\
+    script += "set(\"x min\", 1*1e-6);\n"\
             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
             +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
             +"set(\"z max\", "+str(z_span)+"*1e-6);\n"\
             +"set(\"number of cell groups\",5);\n"\
             +"set(\"group spans\","+cell_spans+"*1e-6);\n"\
-            +"set(\"cells\",[1; 10; 1; 10; 1]);\n"\
-            +"set(\"subcell method\",[0; 1; 0; 1; 0]);\n"
+            +"set(\"cells\",[1; 20; 10; 20; 1]);\n"\
+            +"set(\"subcell method\",[0; 1; 1; 1; 0]);\n"\
+            +"set(\"display cells\",1);\n"\
+            +"set(\"mesh cells y\","+str(total_width)+");\n"\
+            +"set(\"mesh cells z\","+str(z_span*10)+");\n"\
 
     # ports
     script += "addemeport;\n"\
@@ -321,12 +342,23 @@ def eme_simulator(y_span: float, z_span: float,
             +"set(\"z span\",7e-6);\n"\
             +"set(\"mode selection\",\"fundamental mode\");\n"
 
+    # mesh
+    script += "addmesh;\n"\
+            +""
+
+
+
     script += "addemeprofile;\n"\
+            +"set(\"monitor type\",\"2D Z-normal\");\n"\
             +"set(\"x min\", 0);\n"\
+            +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
+            +"set(\"x resolution\",2000);\n"\
             +"addemeindex;\n"\
+            +"set(\"monitor type\",\"2D Z-normal\");\n"\
             +"set(\"x min\", 0);\n"\
+            +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"
 
@@ -338,6 +370,7 @@ def eme_simulator(y_span: float, z_span: float,
 
 def dir_coupler_builder(param_1: dict, param_2: dict,
                         dist: float, material: str,
+                        name: str,
                         addEMEsolver: bool= True) -> None:
     """
     Prepares script to build directional coupler in the triplex scheme
@@ -387,7 +420,7 @@ def dir_coupler_builder(param_1: dict, param_2: dict,
 
 
     if addEMEsolver:
-        script += eme_simulator(1.5*param_2["y span"]/2, 2*param_2["base height"]+dist,
+        script += eme_simulator(param_2["y span"]/1.2, 2*param_2["base height"]+dist,
                             param_2["Lc"], param_2["Ls"], param_2["Lw"], param_2["y span"]/2,
                             dist)
 
@@ -395,7 +428,7 @@ def dir_coupler_builder(param_1: dict, param_2: dict,
 
     mode = MODE(hide = True)
     mode.eval(script)
-    mode.save(f"simulations.lms")
+    mode.save(f"{name}.lms")
 
 
 def straight_wgd_builder(param_1, param_2, dist, material):
