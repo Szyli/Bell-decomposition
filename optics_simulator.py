@@ -2,12 +2,23 @@
 import numpy as np
 # include ANSYS
 import sys, os
-# Note: This path may very for users, therefore
+# Note: This path may vary for users, therefore
 # Todo: Update to find path corresponding to lumerical
 sys.path.append("D:\\lumerical\\api\\python")
 sys.path.append(os.path.abspath(""))
 
-from lumapi import MODE
+def mode_select(mode: str, vis: bool) -> None:
+    if mode == "MODE":
+        from lumapi import MODE
+        solver = MODE(hide = vis)
+        return solver
+    if mode == "FDTD":
+        from lumapi import FDTD
+        solver = FDTD(hide = vis)
+        return solver
+    else:
+        print("invalid Ansys lumapi given!")
+    print("{mode} selected.")
 
 class StraightWGD:
     """
@@ -43,11 +54,12 @@ class StraightWGD:
         self.material = material
         self.pole = poles + " * 1e-6"
 
-    def builder(self) -> str:
+    def builder(self, name: str) -> str:
         """
           Function to prepare script for ansys MODE to evaluate the
         defined straight waveguide.
         """
+        
         script = "addwaveguide;\n"\
                 +"set(\"base width\", "+str(self.width)+");\n"\
                 +"set(\"base height\", "+str(self.height)+");\n"\
@@ -55,7 +67,8 @@ class StraightWGD:
                 +"set(\"poles\", "+self.pole+");\n"\
                 +"set(\"material\", \""+self.material+"\");\n"\
                 +"set(\"override mesh order from material database\",1);\n"\
-                +"set(\"mesh order\",1);\n"
+                +"set(\"mesh order\",1);\n"\
+                +"set('name','"+name+"');\n"
         return script
 
 class BentWGD:
@@ -93,7 +106,7 @@ class BentWGD:
         self.material = material
         self.pole = poles + " * 1e-6"
 
-    def builder(self) -> str:
+    def builder(self, name: str) -> str:
 
         script = "addwaveguide;\n"\
                 +"set(\"base width\", "+str(self.width)+");\n"\
@@ -102,14 +115,59 @@ class BentWGD:
                 +"set(\"poles\", "+self.pole+");\n"\
                 +"set(\"material\", \""+self.material+"\");\n"\
                 +"set(\"override mesh order from material database\",1);\n"\
-                +"set(\"mesh order\",1);\n"
+                +"set(\"mesh order\",1);\n"\
+                +"set('name','"+name+"');\n"
         return script
 
+def single_straight(parent: str, mode: str, z_pos: float,
+                    x_pos: float, y_pos: float,
+                    base_height: float, base_width: float, base_angle: float,
+                    material: str, Lw: float) -> str:
+    """
+    Function to build single waveguide of triplex scheme in Ansys.
+
+    **All parameters of length to be added in microns!**
+
+    ---
+
+    Args:
+        parent (str): the name of the structure group in which this one
+                        will be located
+        mode (str): name of this mode
+        z_pos (float): position of the object in the `z` direction
+        x_pos (float): starting position of object in `x` direction
+        y_pos (float): starting position of object in `y` direction
+        base_height (flaot): the height of the wgd
+        base_width (float): the width of the base (bottom of the waveguide)
+        base_angle (flaot): the angle between the base and the sides
+        material (str): material of the waveguide
+        Lw (float): length of the straight waveguide
+    """
+    
+    # given mode
+    script = "addstructuregroup;\n"\
+            +"set('name', '"+parent+"');\n"\
+            +"addtogroup('"+mode+"');\n"\
+            + StraightWGD(base_width, base_height,
+                        base_angle, material,
+                        "["+str(x_pos)+","+str(y_pos)+";"\
+                        +str(x_pos+Lw)+","+str(y_pos)+"]").builder(name="straight wg "+parent+" "+mode)\
+            +"addtogroup('"+mode+"::"+parent+"');\n"
+    
+    # positioning
+    script += "select('"+mode+"::"+parent+"');\n"\
+            +"set(\"z\", "+str(z_pos)+");\n"
+
+    return script
+
+def double_straight():
+    ...
 
 def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
+            x_pos: float, y_pos1: float,
             base_height: float, base_width: float, base_angle: float,
             material: str, y_span: float, gap: float,
-            Lc: float, Ls: float, Lw: float) -> str:
+            Lc: float, Ls: float) -> str:
     """
     This function makes the script for directional couplers in Ansys MODE.
 
@@ -123,6 +181,8 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
         mode1 (str): name of the upper mode in the coupler
         mode2 (str): name of the lower mode in the coupler
         z_pos (float): position of the coupler object in the `z` direction
+        x_pos (float): starting position of object in `x` direction
+        y_pos1 (float): starting position of upper mode in `y` direction
         base_height (flaot): the height of the wgd
         base_width (float): the width of the base (bottom of the waveguide)
         base_angle (flaot): the angle between the base and the sides
@@ -131,105 +191,68 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
         gap (float): gap between two coupling sections
         Lc (float): length of the central straight waveguide sections for coupling
         Ls (float): x span of the four individual s-bend sections
-        Lw (float): length of the four individual straight waveguide sections
-            at the input and output ports
     """
 
-    z_pos = z_pos*1e-6
-
-    script = "addstructuregroup;\n"\
-            +"set('name', '"+parent+"');\n"\
     # mode 1
-
-    # + BentWGD(base_width, base_height,
-    #             base_angle, material,
-    #             "["+str(Lw)+","+str(y_span/2)+";"\
-    #             +str(Lw+Ls/2)+","+str(y_span/2)+";"\
-    #             +str(Lw+Ls/2)+","+str(y_span/4)+"]").builder()\
-    #         +"addtogroup('"+parent+"::"+mode1+"');\n"\
-    # + BentWGD(base_width, base_height,
-    #     base_angle, material,
-    #     "["+str(Lw+Ls/2)+","+str(y_span/4)+";"\
-    #     +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
-    #     +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
-    # +"addtogroup('"+parent+"::"+mode1+"');\n"\
-    script += "addstructuregroup;\n"\
-            +"set('name', '"+mode1+"');\n"\
-            +"addtogroup('"+parent+"');\n"\
-            + StraightWGD(base_width, base_height,
-                        base_angle, material,
-                        "[0,"+str(y_span/2)+";"\
-                        +str(Lw)+","+str(y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode1+"');\n"\
+    script = "addstructuregroup;\n"\
+            +"set('name', '"+parent+" 1');\n"\
+            +"addtogroup('"+mode1+"');\n"\
             + BentWGD(base_width, base_height,
                 base_angle, material,
-                "["+str(Lw)+","+str(y_span/2)+";"\
-                +str(Lw+Ls/2)+","+str(y_span/2)+";"\
-                +str(Lw+Ls/2)+","+str((gap+base_width)/2)+";"\
-                +str(Lw+Ls)+","+str((gap+base_width)/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode1+"');\n"\
+                "["+str(x_pos)+","+str(y_pos1+y_span)+";"\
+                +str(x_pos+Ls/2)+","+str(y_pos1+y_span)+";"\
+                +str(x_pos+Ls/2)+","+str(y_pos1+(gap+base_width)/2)+";"\
+                +str(x_pos+Ls)+","+str(y_pos1+(gap+base_width)/2)+"]").builder(name="S-bend in mode_1 "+parent)\
+            +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(Lw+Ls)+","+str((gap+base_width)/2)+";"\
-                        +str(Lw+Ls+Lc)+","+str((gap+base_width)/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode1+"');\n"\
+                        "["+str(x_pos+Ls)+","+str(y_pos1+(gap+base_width)/2)+";"\
+                        +str(x_pos+Ls+Lc)+","+str(y_pos1+(gap+base_width)/2)+"]").builder(name="straight coupler mode_1 "+parent)\
+            +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(Lw+Ls+Lc)+","+str((gap+base_width)/2)+";"\
-                    +str(Lw+3*Ls/2+Lc)+","+str((gap+base_width)/2)+";"\
-                    +str(Lw+3*Ls/2+Lc)+","+str(y_span/2)+";"\
-                    +str(Lw+2*Ls+Lc)+","+str(y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode1+"');\n"\
-            + StraightWGD(base_width, base_height,
-                        base_angle, material,
-                        "["+str(Lw+2*Ls+Lc)+","+str(y_span/2)+";"\
-                        +str(2*Lw+2*Ls+Lc)+","+str(y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode1+"');\n"\
+                    "["+str(x_pos+Ls+Lc)+","+str(y_pos1+(gap+base_width)/2)+";"\
+                    +str(x_pos+3*Ls/2+Lc)+","+str(y_pos1+(gap+base_width)/2)+";"\
+                    +str(x_pos+3*Ls/2+Lc)+","+str(y_pos1+y_span)+";"\
+                    +str(x_pos+2*Ls+Lc)+","+str(y_pos1+y_span)+"]").builder(name="S-bend out mode_1 "+parent)\
+            +"addtogroup('"+mode1+"::"+parent+" 1');\n"
     # mode 2
     script += "addstructuregroup;\n"\
-            +"set('name', '"+mode2+"');\n"\
-            +"addtogroup('"+parent+"');\n"\
-            + StraightWGD(base_width, base_height,
-                        base_angle, material,
-                        "[0,"+str(-y_span/2)+";"\
-                        +str(Lw)+","+str(-y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode2+"');\n"\
+            +"set('name', '"+parent+" 2');\n"\
+            +"addtogroup('"+mode2+"');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(Lw)+","+str(-y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str(-y_span/2)+";"\
-                    +str(Lw+Ls/2)+","+str(-(gap+base_width)/2)+";"\
-                    +str(Lw+Ls)+","+str(-(gap+base_width)/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode2+"');\n"\
+                    "["+str(x_pos)+","+str(-y_span+y_pos1)+";"\
+                    +str(x_pos+Ls/2)+","+str(-y_span+y_pos1)+";"\
+                    +str(x_pos+Ls/2)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
+                    +str(x_pos+Ls)+","+str(-(gap+base_width)/2 +y_pos1)+"]").builder(name="S-bend in mode_2 "+parent)\
+            +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(Lw+Ls)+","+str(-(gap+base_width)/2)+";"\
-                        +str(Lw+Ls+Lc)+","+str(-(gap+base_width)/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode2+"');\n"\
+                        "["+str(x_pos+Ls)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
+                        +str(x_pos+Ls+Lc)+","+str(-(gap+base_width)/2 +y_pos1)+"]").builder(name="straight coupler mode_2 "+parent)\
+            +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(Lw+Ls+Lc)+","+str(-(gap+base_width)/2)+";"\
-                    +str(Lw+3*Ls/2+Lc)+","+str(-(gap+base_width)/2)+";"\
-                    +str(Lw+3*Ls/2+Lc)+","+str(-y_span/2)+";"\
-                    +str(Lw+2*Ls+Lc)+","+str(-y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode2+"');\n"\
-            + StraightWGD(base_width, base_height,
-                        base_angle, material,
-                        "["+str(Lw+2*Ls+Lc)+","+str(-y_span/2)+";"\
-                        +str(2*Lw+2*Ls+Lc)+","+str(-y_span/2)+"]").builder()\
-            +"addtogroup('"+parent+"::"+mode2+"');\n"
+                    "["+str(x_pos+Ls+Lc)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
+                    +str(x_pos+3*Ls/2+Lc)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
+                    +str(x_pos+3*Ls/2+Lc)+","+str(-y_span +y_pos1)+";"\
+                    +str(x_pos+2*Ls+Lc)+","+str(-y_span +y_pos1)+"]").builder(name="S-bend out mode_2 "+parent)\
+            +"addtogroup('"+mode2+"::"+parent+" 2');\n"
 
-
-    script += "select('"+parent+"');\n"\
+    # positioning
+    script += "select('"+mode1+"::"+parent+" 1');\n"\
+            +"set(\"z\", "+str(z_pos)+");\n"\
+            +"select('"+mode2+"::"+parent+" 2');\n"\
             +"set(\"z\", "+str(z_pos)+");\n"
 
     return script
 
-
-# change input params for more diverse usage
-def insulator(param: dict, dist: float, material: str) -> str:
+def insulator(x_span: float, y_span: float,
+                z_min: float, z_max: float,
+                material: str) -> str:
     """
-    This function prepares a script for Ansys MODE to build
+    This function prepares a script for Ansys to build
     a rectangle around the waveguide of given parameters.
     
     **All parameters of length to be added in microns!**
@@ -237,26 +260,20 @@ def insulator(param: dict, dist: float, material: str) -> str:
     ---
     
     Args:
-        param (dict): this dictionary contains parameters of the
-            given object i.e. a directional coupler such as
-            - `base height` (*float*): the height of the wgd
-            - `y span` (*float*): center-to-center distance between the two input ports
-            - `Lc` (*float*): length of the central straight waveguide sections for coupling
-            - `Ls` (*float*): x span of the four individual s-bend sections
-            - `Lw` (*float*): length of the four individual straight waveguide sections
-                at the input and output ports
-        dist (float): distance between the two layers
+        x_span (float): the total distance in `x` the rectangle spans
+        y_span (float): the total distance in `y` the rectangle spans
+        z_min (float): the bottom position of the rectangle in `z`
+        z_max (float): the top position of the rectangle in `z`
         material (str): the material of the insulator
-        
     """
 
     script = "addrect;\n"\
             +"set(\"x min\",0);\n"\
-            +"set(\"x max\","+str(2*param["Lw"]+2*param["Ls"]+param["Lc"])+"*1e-6);\n"\
-            +"set(\"y min\","+str(-param["y span"])+"*1e-6);\n"\
-            +"set(\"y max\","+str(param["y span"])+"*1e-6);\n"\
-            +"set(\"z min\","+str(-2*param["base height"]-dist)+"*1e-6);\n"\
-            +"set(\"z max\","+str(2*param["base height"]+dist)+"*1e-6);\n"\
+            +"set(\"x max\","+str(x_span)+"*1e-6);\n"\
+            +"set(\"y min\","+str(-y_span/2)+"*1e-6);\n"\
+            +"set(\"y max\","+str(y_span/2)+"*1e-6);\n"\
+            +"set(\"z min\","+str(z_min)+"*1e-6);\n"\
+            +"set(\"z max\","+str(z_max)+"*1e-6);\n"\
             +"set(\"material\", \""+material+"\");\n"\
             +"set('name', 'insulator');\n"
 
@@ -285,23 +302,22 @@ def eme_simulator(y_span: float, z_span: float,
             (it is a symmetric system therefore, give positive number)
     """
 
-    cell_spans = "["+str(Lw-1)+";"+str(Ls)+";"+str(Lc)+";"\
-                +str(Ls)+";"+str(Lw-1)+"]"
+    cell_spans = "["+str(Ls)+";"+str(Lc)+";"+str(Ls)+"]"
 
-    total_length = 2*Lw + 2*Ls + Lc
+    total_length = 2*Ls + Lc
     total_width = y_span*2
 
     # subcells: 0 = none,  1 = CVCS
     script = "addeme;\n"
-    script += "set(\"x min\", 1*1e-6);\n"\
+    script += "set(\"x min\", 0.01*1e-6);\n"\
             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
             +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
             +"set(\"z max\", "+str(z_span)+"*1e-6);\n"\
-            +"set(\"number of cell groups\",5);\n"\
+            +"set(\"number of cell groups\",3);\n"\
             +"set(\"group spans\","+cell_spans+"*1e-6);\n"\
-            +"set(\"cells\",[1; 20; 10; 20; 1]);\n"\
-            +"set(\"subcell method\",[0; 1; 1; 1; 0]);\n"\
+            +"set(\"cells\",[20; 10; 20]);\n"\
+            +"set(\"subcell method\",[1; 1; 1]);\n"\
             +"set(\"display cells\",1);\n"\
             +"set(\"mesh cells y\","+str(total_width)+");\n"\
             +"set(\"mesh cells z\","+str(z_span*10)+");\n"\
@@ -311,15 +327,15 @@ def eme_simulator(y_span: float, z_span: float,
             +"addemeport;\n"\
         +"select(\"EME::Ports::port_1\");\n"\
             +"set(\"port location\",\"left\");\n"\
-            +"set(\"use full simulation span\",1);\n"\
+            +"set(\"use full simulation span\",0);\n"\
             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
             +"set(\"y span\",5.5e-6);\n"\
-            +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
+            +"set(\"z\","+str(z_pos)+"*0.4e-6);\n"\
             +"set(\"z span\",7e-6);\n"\
             +"set(\"mode selection\",\"fundamental mode\");\n"\
         +"select(\"EME::Ports::port_2\");\n"\
             +"set(\"port location\",\"left\");\n"\
-            +"set(\"use full simulation span\",1);\n"\
+            +"set(\"use full simulation span\",0);\n"\
             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
             +"set(\"y span\",5.5e-6);\n"\
             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
@@ -327,7 +343,7 @@ def eme_simulator(y_span: float, z_span: float,
             +"set(\"mode selection\",\"fundamental mode\");\n"\
         +"select(\"EME::Ports::port_3\");\n"\
             +"set(\"port location\",\"right\");\n"\
-            +"set(\"use full simulation span\",1);\n"\
+            +"set(\"use full simulation span\",0);\n"\
             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
             +"set(\"y span\",5.5e-6);\n"\
             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
@@ -335,7 +351,7 @@ def eme_simulator(y_span: float, z_span: float,
             +"set(\"mode selection\",\"fundamental mode\");\n"\
         +"select(\"EME::Ports::port_4\");\n"\
             +"set(\"port location\",\"right\");\n"\
-            +"set(\"use full simulation span\",1);\n"\
+            +"set(\"use full simulation span\",0);\n"\
             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
             +"set(\"y span\",5.5e-6);\n"\
             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
@@ -367,14 +383,71 @@ def eme_simulator(y_span: float, z_span: float,
 
 # main builder functions
 
+def single_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
+                        dist: float, insulation: dict,
+                        name: str, version: str,
+                        hideAnsys: bool = True):
 
-def dir_coupler_builder(param_1: dict, param_2: dict,
-                        dist: float, material: str,
-                        name: str,
-                        addEMEsolver: bool= True) -> None:
+    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist = dist*1e-6
+
+    lower_parent = "lower layer"
+    upper_parent = "upper layer"
+    mode = "mode x"
+
+
+    script: str = "groupscope('::model');\n"
+    script += "addstructuregroup;\n"\
+            +"set('name', '"+mode+"');\n"
+
+    # upper wg
+    script += single_straight(upper_parent,mode,dist,0,0,*upper_wg.values())
+    # lower wg
+    script += single_straight(lower_parent,mode,0,0,0,*lower_wg.values())
+    # insulation
+    script += insulator(*insulation.values())
+
+    mode = mode_select(version, hideAnsys)
+
+    mode.eval(script)
+    mode.save(f"{name}")
+
+def double_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
+                        dist: float, insulation: dict,
+                        name: str, hideAnsys: bool = True):
+
+    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist = dist*1e-6
+
+    lower_parent = "lower layer"
+    upper_parent = "upper layer"
+    mode = "mode x"
+
+
+    script: str = "groupscope('::model');\n"
+    script += "addstructuregroup;\n"\
+            +"set('name', '"+mode+"');\n"
+
+    # upper wg
+    script += single_straight(upper_parent,mode,dist,0,0,*upper_wg.values())
+    # lower wg
+    script += single_straight(lower_parent,mode,0,0,0,*lower_wg.values())
+    
+
+    script += insulator(*insulation.values())
+
+    mode = FDTD(hide = hideAnsys)
+    mode.eval(script)
+    mode.save(f"{name}")
+
+def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
+                        dist: float, insulation: dict,
+                        name: str, version: str,
+                        addEMEsolver: bool= False,
+                        hideAnsys: bool = True) -> None:
     """
     Prepares script to build directional coupler in the triplex scheme
-    in Ansys MODE.
+    in Ansys.
     
     **All parameters of length to be added in microns!**
 
@@ -405,51 +478,48 @@ def dir_coupler_builder(param_1: dict, param_2: dict,
                 at the input and output ports
     """
     
-    parent1 = "lower layer"
-    parent2 = "upper layer"
+    lower_parent = "lower layer"
+    upper_parent = "upper layer"
     mode1 = "mode_1"
     mode2 = "mode_2"
 
-    dist = dist + param_1["base height"]/2 + param_2["base height"]/2
+    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist = dist*1e-6
 
     script: str = "groupscope('::model');\n"
+    script += "addstructuregroup;\n"\
+            +"set('name', '"+mode1+"');\n"\
+            +"addstructuregroup;\n"\
+            +"set('name', '"+mode2+"');\n"
+    
+    # upper wg
+    script += coupler(upper_parent, mode1, mode2, dist, 0, 0, *upper_wg.values())
+    # lower wg
+    script += coupler(lower_parent, mode1, mode2, 0, 0, 0, *lower_wg.values())
+    script += insulator(*insulation.values())
 
-    script += coupler(parent2, mode1, mode2, dist, *param_2.values())
-    script += coupler(parent1, mode1, mode2, 0, *param_1.values())
-    script += insulator(param_2, dist, material)
+
+    # if addEMEsolver:
+    #     script += eme_simulator(param_2["y span"]/1.2, 2*param_2["base height"]+dist,
+    #                         param_2["Lc"], param_2["Ls"], param_2["Lw"], param_2["y span"]/2,
+    #                         dist)
 
 
-    if addEMEsolver:
-        script += eme_simulator(param_2["y span"]/1.2, 2*param_2["base height"]+dist,
-                            param_2["Lc"], param_2["Ls"], param_2["Lw"], param_2["y span"]/2,
-                            dist)
+    mode = mode_select(version, hideAnsys)
 
-
-
-    mode = MODE(hide = True)
     mode.eval(script)
-    mode.save(f"{name}.lms")
+    mode.save(f"{name}")
 
 
-def straight_wgd_builder(param_1, param_2, dist, material):
-
-    dist = dist + param_1["base height"]/2 + param_2["base height"]/2
-
-
-    script: str = "groupscope('::model');\n"
-
-    script += StraightWGD(param_1["base width"], param_1["base height"],
-                        param_1["base angle"], param_1["material"],
-                        "[0,"+str(param_1["y span"]/2)+";"\
-                        +str(param_1["Lw"])+","+str(param_1["y span"]/2)+"]").builder()\
-            +StraightWGD(param_2["base width"], param_2["base height"],
-                        param_2["base angle"], param_2["material"],
-                        "[0,"+str(param_2["y span"]/2)+";"\
-                        +str(param_2["Lw"])+","+str(param_2["y span"]/2)+"]").builder()\
-            +"set(\"z\", "+str(dist)+"*1e-6);\n"\
-            +insulator(param_2, dist, material)
-
-    mode = MODE(hide = True)
-    mode.eval(script)
-    mode.save(f"straight.lms")
-
+def circuit(lower_wg: dict, upper_wg: dict, insulation: dict, dist: float,
+            name: str, hideAnsys: bool = True) -> None:
+    """
+    This function puts together the final circuit.
+    """
+    
+    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist = dist*1e-6
+    
+    
+    
+    ...
