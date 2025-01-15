@@ -249,8 +249,8 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
     return script
 
 def insulator(x_span: float, y_span: float,
-                z_min: float, z_max: float,
-                material: str) -> str:
+                material: str,
+                z_min: float, z_max: float, idx: int) -> str:
     """
     This function prepares a script for Ansys to build
     a rectangle around the waveguide of given parameters.
@@ -275,140 +275,207 @@ def insulator(x_span: float, y_span: float,
             +"set(\"z min\","+str(z_min)+"*1e-6);\n"\
             +"set(\"z max\","+str(z_max)+"*1e-6);\n"\
             +"set(\"material\", \""+material+"\");\n"\
-            +"set('name', 'insulator');\n"
+            +"set('name', 'insulator_"+str(idx)+"');\n"
 
     return script
 
-def eme_simulator(y_span: float, z_span: float,
-                Lc: float, Ls: float, Lw: float,
-                y_pos: float, z_pos: float) -> str:
+
+"""
+# def eme_simulator(y_span: float, z_span: float,
+#                 Lc: float, Ls: float, Lw: float,
+#                 y_pos: float, z_pos: float) -> str:
+#     ""
+#     This function writes script for Ansys MODE to prepare
+#     an EME solver for given parameters of directional coupler.
+#     It includes four EME ports at the inputs and outputs.
+    
+#     ---
+    
+#     Args:
+#         y_span (float): distance in `y` direction that the simulation area covers
+#         z_span (float): distance in `z` direction that the simulation area covers
+#         Lc (float): length of the central straight waveguide sections for coupling
+#         Ls (float): x span of the four individual s-bend sections
+#         Lw (float): length of the four individual straight waveguide sections
+#                 at the input and output ports
+#         y_pos (float): position of ports in `y` direction
+#             (it is a symmetric system therefore, give positive number)
+#         z_pos (float): position of ports in `z` direction
+#             (it is a symmetric system therefore, give positive number)
+#     ""
+
+#     cell_spans = "["+str(Ls)+";"+str(Lc)+";"+str(Ls)+"]"
+
+#     total_length = 2*Ls + Lc
+#     total_width = y_span*2
+
+#     # subcells: 0 = none,  1 = CVCS
+#     script = "addeme;\n"
+#     script += "set(\"x min\", 0.01*1e-6);\n"\
+#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
+#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
+#             +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
+#             +"set(\"z max\", "+str(z_span)+"*1e-6);\n"\
+#             +"set(\"number of cell groups\",3);\n"\
+#             +"set(\"group spans\","+cell_spans+"*1e-6);\n"\
+#             +"set(\"cells\",[20; 10; 20]);\n"\
+#             +"set(\"subcell method\",[1; 1; 1]);\n"\
+#             +"set(\"display cells\",1);\n"\
+#             +"set(\"mesh cells y\","+str(total_width)+");\n"\
+#             +"set(\"mesh cells z\","+str(z_span*10)+");\n"\
+
+#     # ports
+#     script += "addemeport;\n"\
+#             +"addemeport;\n"\
+#         +"select(\"EME::Ports::port_1\");\n"\
+#             +"set(\"port location\",\"left\");\n"\
+#             +"set(\"use full simulation span\",0);\n"\
+#             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
+#             +"set(\"y span\",5.5e-6);\n"\
+#             +"set(\"z\","+str(z_pos)+"*0.4e-6);\n"\
+#             +"set(\"z span\",7e-6);\n"\
+#             +"set(\"mode selection\",\"fundamental mode\");\n"\
+#         +"select(\"EME::Ports::port_2\");\n"\
+#             +"set(\"port location\",\"left\");\n"\
+#             +"set(\"use full simulation span\",0);\n"\
+#             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
+#             +"set(\"y span\",5.5e-6);\n"\
+#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
+#             +"set(\"z span\",7e-6);\n"\
+#             +"set(\"mode selection\",\"fundamental mode\");\n"\
+#         +"select(\"EME::Ports::port_3\");\n"\
+#             +"set(\"port location\",\"right\");\n"\
+#             +"set(\"use full simulation span\",0);\n"\
+#             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
+#             +"set(\"y span\",5.5e-6);\n"\
+#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
+#             +"set(\"z span\",7e-6);\n"\
+#             +"set(\"mode selection\",\"fundamental mode\");\n"\
+#         +"select(\"EME::Ports::port_4\");\n"\
+#             +"set(\"port location\",\"right\");\n"\
+#             +"set(\"use full simulation span\",0);\n"\
+#             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
+#             +"set(\"y span\",5.5e-6);\n"\
+#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
+#             +"set(\"z span\",7e-6);\n"\
+#             +"set(\"mode selection\",\"fundamental mode\");\n"
+
+#     # mesh
+#     script += "addmesh;\n"\
+#             +""
+
+
+
+#     script += "addemeprofile;\n"\
+#             +"set(\"monitor type\",\"2D Z-normal\");\n"\
+#             +"set(\"x min\", 0);\n"\
+#             +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
+#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
+#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
+#             +"set(\"x resolution\",2000);\n"\
+#             +"addemeindex;\n"\
+#             +"set(\"monitor type\",\"2D Z-normal\");\n"\
+#             +"set(\"x min\", 0);\n"\
+#             +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
+#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
+#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"
+
+#     return script
+"""
+
+
+# layout extraction
+
+def layout(num_of_cells: int, materials: list,
+           path: str) -> str:
     """
-    This function writes script for Ansys MODE to prepare
-    an EME solver for given parameters of directional coupler.
-    It includes four EME ports at the inputs and outputs.
+    This function extracts the layout of the built geometry.
+    Use it after geometry is built and while it is open.
     
     ---
     
+    
     Args:
-        y_span (float): distance in `y` direction that the simulation area covers
-        z_span (float): distance in `z` direction that the simulation area covers
-        Lc (float): length of the central straight waveguide sections for coupling
-        Ls (float): x span of the four individual s-bend sections
-        Lw (float): length of the four individual straight waveguide sections
-                at the input and output ports
-        y_pos (float): position of ports in `y` direction
-            (it is a symmetric system therefore, give positive number)
-        z_pos (float): position of ports in `z` direction
-            (it is a symmetric system therefore, give positive number)
+        num_of_cells (int): total number of layers in the geometry
+        materials (list): list of the materials of all layers in the
+                        correct order
+        path (str): the path of the Ansys script that manages the automated
+                    layout extraction
+        
+    Returns:
+        String of instructions for Ansys to evaluate.
     """
+    
+    # loads automation code
+    script: str = "feval("+str(path)+" + \"/GDSexport_core.lsfx\");\n"\
+                + "feval("+str(path)+" + \"/GDS_auto_export.lsf\");\n"
 
-    cell_spans = "["+str(Ls)+";"+str(Lc)+";"+str(Ls)+"]"
+    script += "layer_def = cell("+str(num_of_cells)+");\n"
 
-    total_length = 2*Ls + Lc
-    total_width = y_span*2
+    for layer in range(num_of_cells):
+        script += "layer = struct;\n"\
+                + "layer.z =0.0e-6;\n"\
+                + "layer.material =  \""+str(materials[layer])+"\";\n"\
+                + "layer.layer = "+str(layer)+";\n"\
+                + "layer_def{"+str(layer)+"} = layer_"+str(layer)+";\n"
+                # .layer property: optional? , "accept integer, or string"
 
-    # subcells: 0 = none,  1 = CVCS
-    script = "addeme;\n"
-    script += "set(\"x min\", 0.01*1e-6);\n"\
-            +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-            +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
-            +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
-            +"set(\"z max\", "+str(z_span)+"*1e-6);\n"\
-            +"set(\"number of cell groups\",3);\n"\
-            +"set(\"group spans\","+cell_spans+"*1e-6);\n"\
-            +"set(\"cells\",[20; 10; 20]);\n"\
-            +"set(\"subcell method\",[1; 1; 1]);\n"\
-            +"set(\"display cells\",1);\n"\
-            +"set(\"mesh cells y\","+str(total_width)+");\n"\
-            +"set(\"mesh cells z\","+str(z_span*10)+");\n"\
+    # file name definition
+    script += "gds_filename = filebasename(currentfilename) + \".gds\";\n"
 
-    # ports
-    script += "addemeport;\n"\
-            +"addemeport;\n"\
-        +"select(\"EME::Ports::port_1\");\n"\
-            +"set(\"port location\",\"left\");\n"\
-            +"set(\"use full simulation span\",0);\n"\
-            +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
-            +"set(\"y span\",5.5e-6);\n"\
-            +"set(\"z\","+str(z_pos)+"*0.4e-6);\n"\
-            +"set(\"z span\",7e-6);\n"\
-            +"set(\"mode selection\",\"fundamental mode\");\n"\
-        +"select(\"EME::Ports::port_2\");\n"\
-            +"set(\"port location\",\"left\");\n"\
-            +"set(\"use full simulation span\",0);\n"\
-            +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
-            +"set(\"y span\",5.5e-6);\n"\
-            +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-            +"set(\"z span\",7e-6);\n"\
-            +"set(\"mode selection\",\"fundamental mode\");\n"\
-        +"select(\"EME::Ports::port_3\");\n"\
-            +"set(\"port location\",\"right\");\n"\
-            +"set(\"use full simulation span\",0);\n"\
-            +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
-            +"set(\"y span\",5.5e-6);\n"\
-            +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-            +"set(\"z span\",7e-6);\n"\
-            +"set(\"mode selection\",\"fundamental mode\");\n"\
-        +"select(\"EME::Ports::port_4\");\n"\
-            +"set(\"port location\",\"right\");\n"\
-            +"set(\"use full simulation span\",0);\n"\
-            +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
-            +"set(\"y span\",5.5e-6);\n"\
-            +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-            +"set(\"z span\",7e-6);\n"\
-            +"set(\"mode selection\",\"fundamental mode\");\n"
-
-    # mesh
-    script += "addmesh;\n"\
-            +""
-
-
-
-    script += "addemeprofile;\n"\
-            +"set(\"monitor type\",\"2D Z-normal\");\n"\
-            +"set(\"x min\", 0);\n"\
-            +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
-            +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-            +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
-            +"set(\"x resolution\",2000);\n"\
-            +"addemeindex;\n"\
-            +"set(\"monitor type\",\"2D Z-normal\");\n"\
-            +"set(\"x min\", 0);\n"\
-            +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
-            +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-            +"set(\"y max\", "+str(y_span)+"*1e-6);\n"
+    # using automated function to extract layout
+    script += "GDS_AUTOEXPORT_MAIN({\"layer_def\": layer_def, \"gds_filename\": gds_filename, \"verbose\": false });\n"
+    # verbose can be changed into parameter
 
     return script
-
 
 # main builder functions
 
 def single_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
                         dist: float, insulation: dict,
+                        insul_height_bot: float, insul_height_top: float,
                         name: str, version: str,
+                        materials: list,
+                        layout_extract: bool = False,
+                        path: str = "C:/Users/Admin/Desktop/Interferometer/gds_auto_export_package/gds_auto_export_package",
                         hideAnsys: bool = True):
 
-    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
-    dist = dist*1e-6
+    # distance in `z` between two layers of Si3N4
+    dist_gap = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist_gap = dist_gap*1e-6
+    num_of_cells = 5    # 6 with Si
 
     lower_parent = "lower layer"
     upper_parent = "upper layer"
     mode = "mode x"
-
 
     script: str = "groupscope('::model');\n"
     script += "addstructuregroup;\n"\
             +"set('name', '"+mode+"');\n"
 
     # upper wg
-    script += single_straight(upper_parent,mode,dist,0,0,*upper_wg.values())
+    script += single_straight(upper_parent,mode,dist_gap,0,0,*upper_wg.values())
     # lower wg
     script += single_straight(lower_parent,mode,0,0,0,*lower_wg.values())
-    # insulation
-    script += insulator(*insulation.values())
+    # insulations
+    
+    # list of insulation thicknesses
+    layer_thicks = [insul_height_bot,
+                    lower_wg["base height"] + dist + upper_wg["base height"],
+                    insul_height_top]
+    z_min = -(insul_height_bot + lower_wg["base height"]/2)
+    for layer in range(num_of_cells-2):
+        z_max = z_min + layer_thicks[layer]
+    
+        script += insulator(*insulation.values(), z_min, z_max, layer)
+    
+        z_min = z_max
 
+    if layout_extract:
+        script += layout(num_of_cells, materials, path)
+        
     mode = mode_select(version, hideAnsys)
-
+    
     mode.eval(script)
     mode.save(f"{name}")
 
@@ -443,7 +510,7 @@ def double_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
 def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
                         dist: float, insulation: dict,
                         name: str, version: str,
-                        addEMEsolver: bool= False,
+                        layout_extract: bool = False,
                         hideAnsys: bool = True) -> None:
     """
     Prepares script to build directional coupler in the triplex scheme
@@ -498,12 +565,8 @@ def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
     script += coupler(lower_parent, mode1, mode2, 0, 0, 0, *lower_wg.values())
     script += insulator(*insulation.values())
 
-
-    # if addEMEsolver:
-    #     script += eme_simulator(param_2["y span"]/1.2, 2*param_2["base height"]+dist,
-    #                         param_2["Lc"], param_2["Ls"], param_2["Lw"], param_2["y span"]/2,
-    #                         dist)
-
+    if layout_extract:
+        script += layout(num_of_cells, materials, path)
 
     mode = mode_select(version, hideAnsys)
 
