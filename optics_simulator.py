@@ -119,6 +119,79 @@ class BentWGD:
                 +"set('name','"+name+"');\n"
         return script
 
+class GeometryHolder:
+    """
+    
+    """
+
+    def __init__(self, bot_height: float, top_height: float,
+                top_width: float, base_angle: float, dist: float,
+                bend_height: float, bend_length: float,
+                gap: float, Lc: float,
+                wg_material: str, insul_material: str,
+                straight: bool = False, wg_length: float = 0):
+        
+        # parameters for single straight wg cell
+        if straight:
+            self.upper_wg: dict = {
+                    "base height" : top_height,
+                    "base width" : bot_width_calc(base_angle,
+                                                top_width, top_height),
+                    "base angle" : base_angle,
+                    "material" : wg_material,
+                    "Lw" : wg_length,
+                    }
+            
+            self.lower_wg: dict = {
+                    "base height" : bot_height,
+                    "base width" : bot_width_calc(base_angle,
+                                                bot_width_calc(base_angle,
+                                                    self.upper_wg["base width"], dist),
+                                                bot_height),
+                    "base angle" : base_angle,
+                    "material" : wg_material,
+                    "Lw" : wg_length
+                    }
+
+            self.insulation: dict = {
+                    "x span" : wg_length,
+                    "y span" : bend_height*4 + gap,
+                    "material" : insul_material
+                    }
+        # parameters for coupler cell
+        elif straight == False:
+            self.upper_wg: dict = {
+                    "base height" : top_height,
+                    "base width" : bot_width_calc(base_angle,
+                                                top_width, top_height),
+                    "base angle" : base_angle,
+                    "material" : wg_material,
+                    "y span" : bend_height,
+                    "Ls" : bend_length,
+                    "gap" : gap,
+                    "Lc" : Lc
+                    }
+            
+            self.lower_wg: dict = {
+                    "base height" : bot_height,
+                    "base width" : bot_width_calc(base_angle,
+                                                bot_width_calc(base_angle,
+                                                    self.upper_wg["base width"], dist),
+                                                bot_height),
+                    "base angle" : base_angle,
+                    "material" : wg_material,
+                    "y span" : bend_height,
+                    "Ls" : bend_length,
+                    "gap" : gap,
+                    "Lc" : Lc
+                    }
+            self.insulation: dict = {
+                    "x span" : bend_length*2 + Lc,
+                    "y span" : bend_height*4 + gap,
+                    "material" : insul_material
+                    }
+
+
 def single_straight(parent: str, mode: str, z_pos: float,
                     x_pos: float, y_pos: float,
                     base_height: float, base_width: float, base_angle: float,
@@ -166,8 +239,8 @@ def double_straight():
 def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
             x_pos: float, y_pos1: float,
             base_height: float, base_width: float, base_angle: float,
-            material: str, y_span: float, gap: float,
-            Lc: float, Ls: float) -> str:
+            material: str, y_span: float, Ls: float,
+            gap: float, Lc: float, ) -> str:
     """
     This function makes the script for directional couplers in Ansys MODE.
 
@@ -250,7 +323,8 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
 
 def insulator(x_span: float, y_span: float,
                 material: str,
-                z_min: float, z_max: float, idx: int) -> str:
+                z_mid: float, z_span: float, idx: int,
+                parent: str, groupname: str) -> str:
     """
     This function prepares a script for Ansys to build
     a rectangle around the waveguide of given parameters.
@@ -267,127 +341,55 @@ def insulator(x_span: float, y_span: float,
         material (str): the material of the insulator
     """
 
-    script = "addrect;\n"\
+    # if idx == 0:
+    #     groupname = "bot insulation"
+    # elif idx == 1:
+    #     groupname = "mid insulation"
+    # elif idx == 2:
+    #     groupname = "top insulation"
+    # else:
+    #     print("Wrong index in insulation builder!")
+    #     return
+
+    script = "addstructuregroup;\n"\
+            +"set('name', '"+groupname+"');\n"\
+            +"addtogroup('"+parent+"');\n"\
+            +"set(\"z\", "+str(z_mid)+");\n"\
+            +"addrect;\n"\
+            +"addtogroup('"+parent+"::"+groupname+"');\n"\
             +"set(\"x min\",0);\n"\
             +"set(\"x max\","+str(x_span)+"*1e-6);\n"\
             +"set(\"y min\","+str(-y_span/2)+"*1e-6);\n"\
             +"set(\"y max\","+str(y_span/2)+"*1e-6);\n"\
-            +"set(\"z min\","+str(z_min)+"*1e-6);\n"\
-            +"set(\"z max\","+str(z_max)+"*1e-6);\n"\
+            +"set(\"z\", 0);\n"\
+            +"set(\"z span\","+str(z_span)+");\n"\
             +"set(\"material\", \""+material+"\");\n"\
             +"set('name', 'insulator_"+str(idx)+"');\n"
 
     return script
 
+def bot_width_calc(angle: float, width: float, height: float) -> float:
+    """
+    Function to calculate base width of waveguide.
 
-"""
-# def eme_simulator(y_span: float, z_span: float,
-#                 Lc: float, Ls: float, Lw: float,
-#                 y_pos: float, z_pos: float) -> str:
-#     ""
-#     This function writes script for Ansys MODE to prepare
-#     an EME solver for given parameters of directional coupler.
-#     It includes four EME ports at the inputs and outputs.
-    
-#     ---
-    
-#     Args:
-#         y_span (float): distance in `y` direction that the simulation area covers
-#         z_span (float): distance in `z` direction that the simulation area covers
-#         Lc (float): length of the central straight waveguide sections for coupling
-#         Ls (float): x span of the four individual s-bend sections
-#         Lw (float): length of the four individual straight waveguide sections
-#                 at the input and output ports
-#         y_pos (float): position of ports in `y` direction
-#             (it is a symmetric system therefore, give positive number)
-#         z_pos (float): position of ports in `z` direction
-#             (it is a symmetric system therefore, give positive number)
-#     ""
+    ---
 
-#     cell_spans = "["+str(Ls)+";"+str(Lc)+";"+str(Ls)+"]"
+    Args:
+        angle (float): base angle
+        width (float): top width
+        height (float): height of the wg
+    """
 
-#     total_length = 2*Ls + Lc
-#     total_width = y_span*2
-
-#     # subcells: 0 = none,  1 = CVCS
-#     script = "addeme;\n"
-#     script += "set(\"x min\", 0.01*1e-6);\n"\
-#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
-#             +"set(\"z min\", "+str(-z_span)+"*1e-6);\n"\
-#             +"set(\"z max\", "+str(z_span)+"*1e-6);\n"\
-#             +"set(\"number of cell groups\",3);\n"\
-#             +"set(\"group spans\","+cell_spans+"*1e-6);\n"\
-#             +"set(\"cells\",[20; 10; 20]);\n"\
-#             +"set(\"subcell method\",[1; 1; 1]);\n"\
-#             +"set(\"display cells\",1);\n"\
-#             +"set(\"mesh cells y\","+str(total_width)+");\n"\
-#             +"set(\"mesh cells z\","+str(z_span*10)+");\n"\
-
-#     # ports
-#     script += "addemeport;\n"\
-#             +"addemeport;\n"\
-#         +"select(\"EME::Ports::port_1\");\n"\
-#             +"set(\"port location\",\"left\");\n"\
-#             +"set(\"use full simulation span\",0);\n"\
-#             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
-#             +"set(\"y span\",5.5e-6);\n"\
-#             +"set(\"z\","+str(z_pos)+"*0.4e-6);\n"\
-#             +"set(\"z span\",7e-6);\n"\
-#             +"set(\"mode selection\",\"fundamental mode\");\n"\
-#         +"select(\"EME::Ports::port_2\");\n"\
-#             +"set(\"port location\",\"left\");\n"\
-#             +"set(\"use full simulation span\",0);\n"\
-#             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
-#             +"set(\"y span\",5.5e-6);\n"\
-#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-#             +"set(\"z span\",7e-6);\n"\
-#             +"set(\"mode selection\",\"fundamental mode\");\n"\
-#         +"select(\"EME::Ports::port_3\");\n"\
-#             +"set(\"port location\",\"right\");\n"\
-#             +"set(\"use full simulation span\",0);\n"\
-#             +"set(\"y\","+str(y_pos)+"*1e-6);\n"\
-#             +"set(\"y span\",5.5e-6);\n"\
-#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-#             +"set(\"z span\",7e-6);\n"\
-#             +"set(\"mode selection\",\"fundamental mode\");\n"\
-#         +"select(\"EME::Ports::port_4\");\n"\
-#             +"set(\"port location\",\"right\");\n"\
-#             +"set(\"use full simulation span\",0);\n"\
-#             +"set(\"y\","+str(-y_pos)+"*1e-6);\n"\
-#             +"set(\"y span\",5.5e-6);\n"\
-#             +"set(\"z\","+str(z_pos)+"*1e-6);\n"\
-#             +"set(\"z span\",7e-6);\n"\
-#             +"set(\"mode selection\",\"fundamental mode\");\n"
-
-#     # mesh
-#     script += "addmesh;\n"\
-#             +""
-
-
-
-#     script += "addemeprofile;\n"\
-#             +"set(\"monitor type\",\"2D Z-normal\");\n"\
-#             +"set(\"x min\", 0);\n"\
-#             +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
-#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"\
-#             +"set(\"x resolution\",2000);\n"\
-#             +"addemeindex;\n"\
-#             +"set(\"monitor type\",\"2D Z-normal\");\n"\
-#             +"set(\"x min\", 0);\n"\
-#             +"set(\"x max\", "+str(total_length)+"*1e-6);\n"\
-#             +"set(\"y min\", "+str(-y_span)+"*1e-6);\n"\
-#             +"set(\"y max\", "+str(y_span)+"*1e-6);\n"
-
-#     return script
-"""
+    angle = angle * np.pi / 180
+    w_part = height / np.tan(angle)
+        
+    return float(width + 2*w_part)
 
 
 # layout extraction
 
-def layout(num_of_cells: int, materials: list,
-           path: str) -> str:
+def layout(num_of_cells: int, struct: dict,
+           path: str, name: str) -> str:
     """
     This function extracts the layout of the built geometry.
     Use it after geometry is built and while it is open.
@@ -407,21 +409,24 @@ def layout(num_of_cells: int, materials: list,
     """
     
     # loads automation code
-    script: str = "feval("+str(path)+" + \"/GDSexport_core.lsfx\");\n"\
-                + "feval("+str(path)+" + \"/GDS_auto_export.lsf\");\n"
+    script: str = "feval('"+path+"/GDSexport_core.lsfx');\n"\
+                + "feval('"+path+"/GDS_auto_export.lsf');\n"
 
     script += "layer_def = cell("+str(num_of_cells)+");\n"
 
-    for layer in range(num_of_cells):
-        script += "layer = struct;\n"\
-                + "layer.z =0.0e-6;\n"\
-                + "layer.material =  \""+str(materials[layer])+"\";\n"\
-                + "layer.layer = "+str(layer)+";\n"\
-                + "layer_def{"+str(layer)+"} = layer_"+str(layer)+";\n"
-                # .layer property: optional? , "accept integer, or string"
+    idx = 1
+    for z_pos in struct.keys():
+        # layer_name = str(struct[z_pos].split(" ")[0])
+        script += "layer_"+str(idx)+" = struct;\n"\
+                + "layer_"+str(idx)+".z = "+str(z_pos)+";\n"\
+                + "layer_"+str(idx)+".material =  \""+str(struct[z_pos])+"\";\n"\
+                + "layer_"+str(idx)+".layer = "+str(idx)+";\n"\
+                + "layer_def{"+str(idx)+"} = layer_"+str(idx)+";\n"
+            # .layer property: optional? , "accept integer, or string" => string doesn't work
+        idx += 1
 
     # file name definition
-    script += "gds_filename = filebasename(currentfilename) + \".gds\";\n"
+    script += "gds_filename = '"+name+".gds';\n"
 
     # using automated function to extract layout
     script += "GDS_AUTOEXPORT_MAIN({\"layer_def\": layer_def, \"gds_filename\": gds_filename, \"verbose\": false });\n"
@@ -434,8 +439,8 @@ def layout(num_of_cells: int, materials: list,
 def single_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
                         dist: float, insulation: dict,
                         insul_height_bot: float, insul_height_top: float,
+                        mode_idx: int,
                         name: str, version: str,
-                        materials: list,
                         layout_extract: bool = False,
                         path: str = "C:/Users/Admin/Desktop/Interferometer/gds_auto_export_package/gds_auto_export_package",
                         hideAnsys: bool = True):
@@ -443,11 +448,15 @@ def single_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
     # distance in `z` between two layers of Si3N4
     dist_gap = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
     dist_gap = dist_gap*1e-6
-    num_of_cells = 5    # 6 with Si
+    num_of_cells = 5    # 6 with Si base but that doesn't work when too thick
+    insul_height_bot = insul_height_bot*1e-6
+    insul_height_top = insul_height_top*1e-6
+    dist = dist*1e-6
 
     lower_parent = "lower layer"
     upper_parent = "upper layer"
-    mode = "mode x"
+    cover_parent = "covering"
+    mode = "mode_{}".format(mode_idx)
 
     script: str = "groupscope('::model');\n"
     script += "addstructuregroup;\n"\
@@ -457,22 +466,39 @@ def single_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
     script += single_straight(upper_parent,mode,dist_gap,0,0,*upper_wg.values())
     # lower wg
     script += single_straight(lower_parent,mode,0,0,0,*lower_wg.values())
-    # insulations
     
-    # list of insulation thicknesses
+    structure: dict = {
+        0 : lower_wg["material"],
+        dist_gap : upper_wg["material"]
+    }
+    
+    # list of insulation and base thicknesses
     layer_thicks = [insul_height_bot,
-                    lower_wg["base height"] + dist + upper_wg["base height"],
+                    lower_wg["base height"]*1e-6 + dist + upper_wg["base height"]*1e-6,
                     insul_height_top]
-    z_min = -(insul_height_bot + lower_wg["base height"]/2)
-    for layer in range(num_of_cells-2):
+    
+    groupnames = ["bot insulation",
+                "mid insulation",
+                "top insulation"]
+    
+    z_min = -(insul_height_bot + 0.5*lower_wg["base height"]*1e-6)
+
+    script += "addstructuregroup;\n"\
+            +"set('name', '"+cover_parent+"');\n"
+    
+    for layer in range(num_of_cells-2): # -2 for the waveguides
         z_max = z_min + layer_thicks[layer]
+        z_mid = z_min+(z_max-z_min)/2
     
-        script += insulator(*insulation.values(), z_min, z_max, layer)
-    
+        script += insulator(*insulation.values(), z_mid, layer_thicks[layer], layer,
+                        cover_parent, groupnames[layer])
+        
+        structure[z_mid] = insulation["material"]
+
         z_min = z_max
 
     if layout_extract:
-        script += layout(num_of_cells, materials, path)
+        script += layout(num_of_cells, structure, path, name)
         
     mode = mode_select(version, hideAnsys)
     
@@ -509,8 +535,11 @@ def double_straight_wgd_builder(lower_wg: dict, upper_wg: dict,
 
 def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
                         dist: float, insulation: dict,
+                        insul_height_bot: float, insul_height_top: float,
+                        top_mode_idx: int, bot_mode_idx: int,
                         name: str, version: str,
                         layout_extract: bool = False,
+                        path: str = "C:/Users/Admin/Desktop/Interferometer/gds_auto_export_package/gds_auto_export_package",
                         hideAnsys: bool = True) -> None:
     """
     Prepares script to build directional coupler in the triplex scheme
@@ -545,28 +574,65 @@ def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
                 at the input and output ports
     """
     
+    # distance in `z` between two layers of Si3N4
+    dist_gap = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
+    dist_gap = dist_gap*1e-6
+    num_of_cells = 5    # 6 with Si base but that doesn't work when too thick
+    insul_height_bot = insul_height_bot*1e-6
+    insul_height_top = insul_height_top*1e-6
+    dist = dist*1e-6
+    # base_height = base_height*1e-6
+    
     lower_parent = "lower layer"
     upper_parent = "upper layer"
-    mode1 = "mode_1"
-    mode2 = "mode_2"
-
-    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
-    dist = dist*1e-6
+    cover_parent = "covering"
+    mode1 = "mode_{}".format(top_mode_idx)
+    mode2 = "mode_{}".format(bot_mode_idx)
 
     script: str = "groupscope('::model');\n"
+
     script += "addstructuregroup;\n"\
             +"set('name', '"+mode1+"');\n"\
             +"addstructuregroup;\n"\
             +"set('name', '"+mode2+"');\n"
-    
+
     # upper wg
-    script += coupler(upper_parent, mode1, mode2, dist, 0, 0, *upper_wg.values())
+    script += coupler(upper_parent, mode1, mode2, dist_gap, 0, 0, *upper_wg.values())
     # lower wg
     script += coupler(lower_parent, mode1, mode2, 0, 0, 0, *lower_wg.values())
-    script += insulator(*insulation.values())
+    
+    structure: dict = {
+        0 : lower_wg["material"],
+        dist_gap : upper_wg["material"]
+    }
+
+    # list of insulation and base thicknesses
+    layer_thicks = [insul_height_bot,
+                    lower_wg["base height"]*1e-6 + dist + upper_wg["base height"]*1e-6,
+                    insul_height_top]
+    
+    groupnames = ["bot insulation",
+                "mid insulation",
+                "top insulation"]
+    
+    z_min = -(insul_height_bot + 0.5*lower_wg["base height"]*1e-6)
+
+    script += "addstructuregroup;\n"\
+            +"set('name', '"+cover_parent+"');\n"
+
+    for layer in range(num_of_cells-2): # -2 for the waveguides
+        z_max = z_min + layer_thicks[layer]
+        z_mid = z_min+(z_max-z_min)/2
+    
+        script += insulator(*insulation.values(), z_mid, layer_thicks[layer], layer,
+                        cover_parent, groupnames[layer])
+        
+        structure[z_mid] = insulation["material"]
+
+        z_min = z_max
 
     if layout_extract:
-        script += layout(num_of_cells, materials, path)
+        script += layout(num_of_cells, structure, path, name)
 
     mode = mode_select(version, hideAnsys)
 
@@ -574,14 +640,12 @@ def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
     mode.save(f"{name}")
 
 
-def circuit(lower_wg: dict, upper_wg: dict, insulation: dict, dist: float,
-            name: str, hideAnsys: bool = True) -> None:
+def circuit() -> None:
     """
     This function puts together the final circuit.
     """
     
-    dist = dist + lower_wg["base height"]/2 + upper_wg["base height"]/2
-    dist = dist*1e-6
+    
     
     
     
