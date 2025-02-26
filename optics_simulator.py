@@ -1,6 +1,5 @@
 
 import numpy as np
-# include ANSYS
 import sys, os
 # Note: This path may vary for users, therefore
 # Todo: Update to find path corresponding to lumerical
@@ -8,21 +7,37 @@ sys.path.append("D:\\lumerical\\api\\python")
 sys.path.append(os.path.abspath(""))
 
 def mode_select(mode: str, vis: bool) -> None:
+    """
+    Use this function to select the Ansys Lumerical solver to use.
+
+    ---
+
+    Args:
+        mode (str): The name of the solver. Currently supported:
+            - MODE
+            - FDTD
+        vis (bool): `True` if you want Ansys hidden during the run and `False` otherwise
+    Note
+    ---
+        `DEVICE` is not a supported solver since it handles objects' materials differently.
+        A working practice is to build the system in `MODE` or `FDTD` and copy the objects
+        from the object tree.
+    Returns:
+        Lumapi solver object.
+    """
     if mode == "MODE":
         from lumapi import MODE
         solver = MODE(hide = vis)
+        print("{} was selected.".format(mode))
         return solver
     if mode == "FDTD":
         from lumapi import FDTD
         solver = FDTD(hide = vis)
+        print("{} was selected.".format(mode))
         return solver
-    # if mode == "DEVICE":
-    #     from lumapi import DEVICE
-    #     solver = DEVICE(hide = vis)
-    #     return solver
     else:
-        print("invalid Ansys lumapi given!")
-    print("{mode} selected.")
+        print("Invalid Ansys solver mode given!")
+        print("{} was selected.".format(mode))
 
 class StraightWGD:
     """
@@ -32,25 +47,22 @@ class StraightWGD:
 
     ---
 
-    Args:
-        base_width (float): the width of the base (bottom of the waveguide)
-        base_height (flaot): the height of the wgd
-        base_angle (flaot): the angle between the base and the sides
-        material (str): material of the waveguide
+    Attributes:
+        base_width (float): The width of the base (bottom of the waveguide)
+        base_height (flaot): The height of the wgd
+        base_angle (flaot): The angle between the base and the sides
+        material (str): Material of the waveguide
         poles (str): `x` and `y` coordinates of the starting and the ending
               point of the wgd
-
-     ---
-
-    Functions
+    Methods
     ---
 
-    - ``builder``: returns the script for ansys MODE to evaluate the
-                    defined straight waveguide.
+    ``builder(name)``:
+        Prepares the script for selected ansys solver to evaluate a straight waveguide
     """
     def __init__(self, base_width: float,
                 base_height: float, base_angle: float,
-                material: str, poles: str):
+                material: str, poles: str) -> None:
 
         self.width = base_width * 1e-6
         self.height = base_height * 1e-6
@@ -60,8 +72,14 @@ class StraightWGD:
 
     def builder(self, name: str) -> str:
         """
-          Function to prepare script for ansys MODE to evaluate the
-        defined straight waveguide.
+        Returns the script building defined straight waveguide.
+
+        ---
+
+        Args:
+            name (str): the name of the waveguide object
+        Returns:
+            Script to evaluate defined straight waveguide
         """
         
         script = "addwaveguide;\n"\
@@ -143,13 +161,17 @@ class MMI:
     """
     def __init__(self, mmi_width: float,
                 mmi_height: float, mmi_length: float,
-                material: str, x_pos: float, z_pos: float):
+                base_angle: float, material: str,
+                x_pos: float, z_pos: float, y_pos: float=0):
 
         self.width = mmi_width * 1e-6
         self.height = mmi_height * 1e-6
-        self.length = mmi_length * 1e-6
+        self.angle = base_angle
+        # self.length = mmi_length * 1e-6
+        self.pole = "["+str(x_pos* 1e-6)+","+str(y_pos* 1e-6)+";"\
+                        +str((x_pos + mmi_length) * 1e-6)+","+str(y_pos* 1e-6)+"]"
         self.material = material
-        self.x_pos = x_pos * 1e-6
+        # self.x_pos = x_pos * 1e-6
         self.z_pos = z_pos
 
     def builder(self, name: str) -> str:
@@ -158,17 +180,28 @@ class MMI:
         defined MMI.
         """
         
-        script = "addrect;\n"\
-                +"set(\"y min\", "+str(-self.width/2)+");\n"\
-                +"set(\"y max\", "+str(self.width/2)+");\n"\
+        # script = "addrect;\n"\
+        #         +"set(\"y min\", "+str(-self.width/2)+");\n"\
+        #         +"set(\"y max\", "+str(self.width/2)+");\n"\
+        #         +"set(\"z\", "+str(self.z_pos)+");\n"\
+        #         +"set(\"z span\", "+str(self.height)+");\n"\
+        #         +"set(\"x min\", "+str(self.x_pos)+");\n"\
+        #         +"set(\"x max\", "+str(self.x_pos + self.length)+");\n"\
+        #         +"set(\"material\", \""+self.material+"\");\n"\
+        #         +"set(\"override mesh order from material database\",1);\n"\
+        #         +"set(\"mesh order\",1);\n"\
+        #         +"set('name','"+name+"');\n"
+        script = "addwaveguide;\n"\
+                +"set(\"base width\", "+str(self.width)+");\n"\
+                +"set(\"base height\", "+str(self.height)+");\n"\
+                +"set(\"base angle\", "+str(self.angle)+");\n"\
                 +"set(\"z\", "+str(self.z_pos)+");\n"\
-                +"set(\"z span\", "+str(self.height)+");\n"\
-                +"set(\"x min\", "+str(self.x_pos)+");\n"\
-                +"set(\"x max\", "+str(self.x_pos + self.length)+");\n"\
+                +"set(\"poles\", "+self.pole+");\n"\
                 +"set(\"material\", \""+self.material+"\");\n"\
                 +"set(\"override mesh order from material database\",1);\n"\
                 +"set(\"mesh order\",1);\n"\
                 +"set('name','"+name+"');\n"
+        
         return script
 
 class LinearTaper:
@@ -337,23 +370,112 @@ class LinearTaper:
 
 class GeometryHolder:
     """
-    
+    This class is meant to prepare all the proper parameters by the user input
+    in order to build desired objects.
+
+    **All parameters of length to be added in microns!**
+
+    ---
+
+    Attributes:
+        bot_height (float):
+        top_height (float):
+        top_width (float):
+        base_angle (float):
+        dist (float):
+        bend_height (float):
+        bend_length (float):
+        gap (float):
+        Lc (float):
+        wg_material (str):
+        insul_material (str):
+        multimode (bool):
+        mmi_length (float):
+        mmi_taper_length (float):
+        taper_width (float):
+        straight (bool):
+        wg_length (float):
+    Methods
+    ---
+
+    ``bot_width_calc(angle, width, height)``:
+        Computes the bottom width of waveguide from the top width, height and side angle.
     """
+    
+    def bot_width_calc(self, angle: float, width: float, height: float) -> float:
+        """
+        Function to calculate base width of given waveguide.
+
+        ---
+
+        Args:
+            angle (float): base angle
+            width (float): top width
+            height (float): height of the wg
+        Returns:
+            The base width of the waveguide.
+        """
+
+        angle = angle * np.pi / 180
+        w_part = height / np.tan(angle)
+        
+        return float(width + 2*w_part)
+
+    def mmi_top_width_calc(self, gap: float, taper_width: float) -> float:
+        """
+        Function to calculate the top width of the MMI region based on
+        gap and taper width.
+
+        Args:
+            gap (float): the distance between the neighbouring tapers' wider ends
+            taper_width (float): the width of the taper's wider end
+        Returns:
+            The top width of the MMI region.
+        """
+
+        # hard coded part to estimate the effective width over the MMI's width
+        # it is largest for TE modes where sgm=0
+        lmbd = 1.55     # wavelength in use (lambda)
+        nc = 1.444      # effective index of cladding
+        nr = 1.9961     # effective index of waveguide
+        sgm = 0         # (sigma); for `TE = 0` for `TM = 1`
+
+        ext = (lmbd/np.pi)*(nc/nr)**(2*sgm) * (nr**2 - nc**2)**(-0.5)
+        We = 3*(gap + taper_width)
+        # We = W_mmi + ext = 3(gap+width)
+
+        return We - ext
+
+    def mmi_length_calc(self, gap: float, taper_width: float) -> float:
+        """
+        Function to compute the MMI region's length.
+
+        Args:
+            gap (float): the distance between the neighbouring tapers' wider ends
+            taper_width (float): the width of the taper's wider end
+        Returns:
+            The length of the MMI region.
+        """
+        n0 = 1.53344        # effective idnex of fundamental mode
+        lmbd = 1.55         # wavelength in use (lambda)
+        We = 3*(gap + taper_width)
+
+        return (4*n0*We**2) / (6*lmbd)
 
     def __init__(self, bot_height: float, top_height: float,
                 top_width: float, base_angle: float, dist: float,
                 bend_height: float, bend_length: float,
                 gap: float, Lc: float,
                 wg_material: str, insul_material: str,
-                multimode: bool = False, mmi_length: float = 0,
-                mmi_taper_length: float = 0,
+                multimode: bool = False,
+                mmi_taper_length: float = 0, taper_width: float = 0,
                 straight: bool = False, wg_length: float = 0):
         
         # parameters for single straight wg cell
         if straight:
             self.upper_wg: dict = {
                     "base height" : top_height,
-                    "base width" : bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
                                                 top_width, top_height),
                     "base angle" : base_angle,
                     "material" : wg_material,
@@ -362,8 +484,8 @@ class GeometryHolder:
             
             self.lower_wg: dict = {
                     "base height" : bot_height,
-                    "base width" : bot_width_calc(base_angle,
-                                                bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
+                                                self.bot_width_calc(base_angle,
                                                     self.upper_wg["base width"], dist),
                                                 bot_height),
                     "base angle" : base_angle,
@@ -376,11 +498,11 @@ class GeometryHolder:
                     "y span" : bend_height*4 + gap,
                     "material" : insul_material
                     }
-        # parameters for coupler cell
+        # parameters for directional coupler cell
         elif (straight == False) and (multimode == False):
             self.upper_wg: dict = {
                     "base height" : top_height,
-                    "base width" : bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
                                                 top_width, top_height),
                     "base angle" : base_angle,
                     "material" : wg_material,
@@ -392,8 +514,8 @@ class GeometryHolder:
             
             self.lower_wg: dict = {
                     "base height" : bot_height,
-                    "base width" : bot_width_calc(base_angle,
-                                                bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
+                                                self.bot_width_calc(base_angle,
                                                     self.upper_wg["base width"], dist),
                                                 bot_height),
                     "base angle" : base_angle,
@@ -413,8 +535,15 @@ class GeometryHolder:
         elif (straight == False) and (multimode == True):
             self.upper_wg: dict = {
                     "base height" : top_height,
-                    "base width" : bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
                                                 top_width, top_height),
+                    "taper width": self.bot_width_calc(base_angle,
+                                                taper_width, top_height),
+                    "taper length": mmi_taper_length,
+                    "mmi base width": self.bot_width_calc(base_angle,
+                                                self.mmi_top_width_calc(gap,taper_width),
+                                                top_height),
+                    "mmi length": self.mmi_length_calc(gap, taper_width),
                     "base angle" : base_angle,
                     "material" : wg_material,
                     "y span" : bend_height,
@@ -425,10 +554,20 @@ class GeometryHolder:
             
             self.lower_wg: dict = {
                     "base height" : bot_height,
-                    "base width" : bot_width_calc(base_angle,
-                                                bot_width_calc(base_angle,
+                    "base width" : self.bot_width_calc(base_angle,
+                                                self.bot_width_calc(base_angle,
                                                     self.upper_wg["base width"], dist),
                                                 bot_height),
+                    "taper width": self.bot_width_calc(base_angle,
+                                                self.bot_width_calc(base_angle,
+                                                    self.upper_wg["taper width"], dist),
+                                                top_height),
+                    "taper length": mmi_taper_length,
+                    "mmi base width": self.bot_width_calc(base_angle,
+                                                self.bot_width_calc(base_angle,
+                                                    self.upper_wg["mmi base width"], dist),
+                                                bot_height),
+                    "mmi length": self.upper_wg["mmi length"],
                     "base angle" : base_angle,
                     "material" : wg_material,
                     "y span" : bend_height,
@@ -436,10 +575,10 @@ class GeometryHolder:
                     "gap" : gap,
                     "Lc" : Lc
                     }
-            
+
             self.insulation: dict = {
                     "x span" : bend_length*2 + 2*Lc +\
-                                2* mmi_taper_length + mmi_length,
+                                2* mmi_taper_length + self.upper_wg["mmi length"],
                     "y span" : bend_height*4 + gap,
                     "material" : insul_material
                     }
@@ -619,12 +758,13 @@ def coupler(parent: str, mode1: str, mode2: str, z_pos: float,
     return script
 
 def mmi(parent: str, mode1: str, mode2: str, z_pos: float,
-            x_pos: float, y_pos1: float,
-            base_height: float, base_width: float, base_angle: float,
-            material: str, y_span: float, Ls: float,
-            gap: float, Lc: float,
+            x_pos: float, y_pos: float, y_pos_adj: float,
+            base_height: float, base_width: float,
+            taper_width: float, taper_length: float,
             mmi_width: float, mmi_length: float,
-            taper_width: float, taper_length: float) -> str:
+            base_angle: float,
+            material: str, y_span: float, Ls: float,
+            gap: float, Lc: float) -> str:
     """
     This function makes the script for MMI couplers in Ansys.
 
@@ -656,39 +796,39 @@ def mmi(parent: str, mode1: str, mode2: str, z_pos: float,
             +"addtogroup('"+mode1+"');\n"\
             + BentWGD(base_width, base_height,
                 base_angle, material,
-                "["+str(x_pos)+","+str(y_pos1+y_span)+";"\
-                +str(x_pos+Ls/2)+","+str(y_pos1+y_span)+";"\
-                +str(x_pos+Ls/2)+","+str(y_pos1+(gap+base_width)/2)+";"\
-                +str(x_pos+Ls)+","+str(y_pos1+(gap+base_width)/2)+"]").builder(name="S-bend in " + mode1 +" "+ parent)\
+                "["+str(x_pos)+","+str(y_pos+y_span+y_pos_adj)+";"\
+                +str(x_pos+Ls/2)+","+str(y_pos+y_span+y_pos_adj)+";"\
+                +str(x_pos+Ls/2)+","+str(y_pos+y_pos_adj)+";"\
+                +str(x_pos+Ls)+","+str(y_pos+y_pos_adj)+"]").builder(name="S-bend in " + mode1 +" "+ parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(x_pos+Ls)+","+str(y_pos1+(gap+base_width)/2)+";"\
-                        +str(x_pos+Ls+Lc)+","+str(y_pos1+(gap+base_width)/2)+"]").builder(name="straight connector in " + mode1 +" "+parent)\
+                        "["+str(x_pos+Ls)+","+str(y_pos+y_pos_adj)+";"\
+                        +str(x_pos+Ls+Lc)+","+str(y_pos+y_pos_adj)+"]").builder(name="straight connector in " + mode1 +" "+parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + LinearTaper(base_height,base_width,taper_width,taper_length,
                     base_angle,material,
                     x_pos+Ls+Lc+taper_length/2,
-                    y_pos1+(gap+base_width)/2,
+                    y_pos+y_pos_adj,
                     z_pos).builder(name="taper in " + mode1 +" "+parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + LinearTaper(base_height,taper_width,base_width,taper_length,
                     base_angle,material,
                     x_pos+Ls+Lc+1.5*taper_length+mmi_length,
-                    y_pos1+(gap+base_width)/2,
+                    y_pos+y_pos_adj,
                     z_pos).builder(name="taper out " + mode1 +" "+parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(x_pos+Ls+Lc+taper_length*2+mmi_length)+","+str(y_pos1+(gap+base_width)/2)+";"\
-                        +str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1+(gap+base_width)/2)+"]").builder(name="straight connector out " + mode1 +" "+parent)\
+                        "["+str(x_pos+Ls+Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj)+";"\
+                        +str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj)+"]").builder(name="straight connector out " + mode1 +" "+parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1+(gap+base_width)/2)+";"\
-                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1+(gap+base_width)/2)+";"\
-                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1+y_span)+";"\
-                    +str(x_pos+2*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1+y_span)+"]").builder(name="S-bend out " + mode1 +" "+parent)\
+                    "["+str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj)+";"\
+                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj)+";"\
+                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj+y_span)+";"\
+                    +str(x_pos+2*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos+y_pos_adj+y_span)+"]").builder(name="S-bend out " + mode1 +" "+parent)\
             +"addtogroup('"+mode1+"::"+parent+" 1');\n"
     # mode 2
     script += "addstructuregroup;\n"\
@@ -696,43 +836,44 @@ def mmi(parent: str, mode1: str, mode2: str, z_pos: float,
             +"addtogroup('"+mode2+"');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(x_pos)+","+str(-y_span+y_pos1)+";"\
-                    +str(x_pos+Ls/2)+","+str(-y_span+y_pos1)+";"\
-                    +str(x_pos+Ls/2)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
-                    +str(x_pos+Ls)+","+str(-(gap+base_width)/2 +y_pos1)+"]").builder(name="S-bend in " + mode2 +" "+parent)\
+                    "["+str(x_pos)+","+str(-y_span-y_pos_adj+y_pos)+";"\
+                    +str(x_pos+Ls/2)+","+str(-y_span-y_pos_adj+y_pos)+";"\
+                    +str(x_pos+Ls/2)+","+str(-y_pos_adj +y_pos)+";"\
+                    +str(x_pos+Ls)+","+str(-y_pos_adj +y_pos)+"]").builder(name="S-bend in " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(x_pos+Ls)+","+str(-(gap+base_width)/2 +y_pos1)+";"\
-                        +str(x_pos+Ls+Lc)+","+str(-(gap+base_width)/2 +y_pos1)+"]").builder(name="straight connector in " + mode2 +" "+parent)\
+                        "["+str(x_pos+Ls)+","+str(-y_pos_adj +y_pos)+";"\
+                        +str(x_pos+Ls+Lc)+","+str(-y_pos_adj +y_pos)+"]").builder(name="straight connector in " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + LinearTaper(base_height,base_width,taper_width,taper_length,
                     base_angle,material,
                     x_pos+Ls+Lc+taper_length/2,
-                    y_pos1-(gap+base_width)/2,
+                    y_pos-y_pos_adj,
                     z_pos).builder(name="taper in " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + LinearTaper(base_height,taper_width,base_width,taper_length,
                     base_angle,material,
                     x_pos+Ls+Lc+1.5*taper_length+mmi_length,
-                    y_pos1-(gap+base_width)/2,
+                    y_pos-y_pos_adj,
                     z_pos).builder(name="taper out " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + StraightWGD(base_width, base_height,
                         base_angle, material,
-                        "["+str(x_pos+Ls+Lc+taper_length*2+mmi_length)+","+str(y_pos1-(gap+base_width)/2)+";"\
-                        +str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1-(gap+base_width)/2)+"]").builder(name="straight connector out " + mode2 +" "+parent)\
+                        "["+str(x_pos+Ls+Lc+taper_length*2+mmi_length)+","+str(y_pos-y_pos_adj)+";"\
+                        +str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos-y_pos_adj)+"]").builder(name="straight connector out " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"\
             + BentWGD(base_width, base_height,
                     base_angle, material,
-                    "["+str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1-(gap+base_width)/2)+";"\
-                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1-(gap+base_width)/2)+";"\
-                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1-y_span)+";"\
-                    +str(x_pos+2*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos1-y_span)+"]").builder(name="S-bend out " + mode2 +" "+parent)\
+                    "["+str(x_pos+Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos-y_pos_adj)+";"\
+                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos-y_pos_adj)+";"\
+                    +str(x_pos+1.5*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos-y_span-y_pos_adj)+";"\
+                    +str(x_pos+2*Ls+2*Lc+taper_length*2+mmi_length)+","+str(y_pos-y_span-y_pos_adj)+"]").builder(name="S-bend out " + mode2 +" "+parent)\
             +"addtogroup('"+mode2+"::"+parent+" 2');\n"
 
-    script += MMI(mmi_width, base_height, mmi_length, material,
-                    x_pos+Ls+Lc+taper_length, z_pos).builder(name="MMI "+parent)
+    script += MMI(mmi_width, base_height, mmi_length,
+                base_angle, material,
+                x_pos+Ls+Lc+taper_length, z_pos).builder(name="MMI "+parent)
 
     # positioning
     script += "select('"+mode1+"::"+parent+" 1');\n"\
@@ -741,24 +882,6 @@ def mmi(parent: str, mode1: str, mode2: str, z_pos: float,
             +"set(\"z\", "+str(z_pos)+");\n"
 
     return script
-
-def bot_width_calc(angle: float, width: float, height: float) -> float:
-    """
-    Function to calculate base width of waveguide.
-
-    ---
-
-    Args:
-        angle (float): base angle
-        width (float): top width
-        height (float): height of the wg
-    """
-
-    angle = angle * np.pi / 180
-    w_part = height / np.tan(angle)
-        
-    return float(width + 2*w_part)
-
 
 # layout extraction
 
@@ -987,7 +1110,6 @@ def dir_coupler_builder(lower_wg: dict, upper_wg: dict,
 
 def mmi_coupler_builder(lower_wg: dict, upper_wg: dict,
                         dist: float,
-                        mmi_data: dict, taper_data: dict,
                         insulation: dict,
                         insul_height_bot: float, insul_height_top: float,
                         top_mode_idx: int, bot_mode_idx: int,
@@ -1005,10 +1127,12 @@ def mmi_coupler_builder(lower_wg: dict, upper_wg: dict,
     insul_height_bot = insul_height_bot*1e-6
     insul_height_top = insul_height_top*1e-6
     dist = dist*1e-6
+
+    y_adj = (upper_wg["gap"]+lower_wg["taper width"])/2
     
     lower_parent = "lower layer"
     upper_parent = "upper layer"
-    cover_parent = "covering"
+    cover_parent = "cladding"
     mode1 = "mode_{}".format(top_mode_idx)
     mode2 = "mode_{}".format(bot_mode_idx)
 
@@ -1020,11 +1144,11 @@ def mmi_coupler_builder(lower_wg: dict, upper_wg: dict,
             +"set('name', '"+mode2+"');\n"
     
     # upper layer
-    script += mmi(upper_parent, mode1, mode2, dist_gap, 0, 0,
-                *upper_wg.values(), *mmi_data.values(), *taper_data.values())
+    script += mmi(upper_parent, mode1, mode2, dist_gap, 0, 0, y_adj,
+                *upper_wg.values())
     # lower layer
-    script += mmi(lower_parent, mode1, mode2, 0, 0, 0,
-                *lower_wg.values(), *mmi_data.values(), *taper_data.values())
+    script += mmi(lower_parent, mode1, mode2, 0, 0, 0, y_adj,
+                *lower_wg.values())
     
     structure: dict = {
         0 : lower_wg["material"],
@@ -1077,3 +1201,4 @@ def circuit() -> None:
     
     
     ...
+
