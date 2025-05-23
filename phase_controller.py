@@ -36,7 +36,7 @@ class PhaseControl:
         data_set = np.loadtxt(path)
         return data_set
         
-    def linear(self, x: float |np.ndarray, a: float, b: float) -> float | np.ndarray:
+    def linear(self, x: float |np.ndarray, a: float) -> float | np.ndarray:
         """
         This function returns the value of defined linear function by
         parameters at `x` where in this contaxt it's the heating power
@@ -52,7 +52,7 @@ class PhaseControl:
             The solution of the linear function at `x`;
             The phase shift value at given power.
         """
-        return a*x + b
+        return a*x
 
     def fit(self, data: np.ndarray) -> tuple[list, list]:
         """
@@ -89,9 +89,10 @@ def currcalc(v: float | np.ndarray, r: float, curr_lim: float) -> float | np.nda
         The current in the wire given the parameters in [`mA`].
     """
     curr = (v/r) * 1e-3
-    if curr > curr_lim:
+    if isinstance(curr, float) and curr > curr_lim:
         print("The necessary current oversteps the given limit!\t{:.4f} [mA]".format(curr))
-        # return 0
+    if isinstance(curr, np.ndarray) and (curr > curr_lim).any():
+        print("The necessary currents overstep the given limit!")
     return curr
 
 def voltcalc(p: float |np.ndarray, r: float,
@@ -111,12 +112,13 @@ def voltcalc(p: float |np.ndarray, r: float,
         The voltage in [`V`].
     """
     v = np.sqrt(p*r)
-    if v > v_lim:
+    if isinstance(v, float) and v > v_lim:
         print("The necessary voltage oversteps the given limit!\t{:.4f} [V]".format(v))
-        # return 0
+    if isinstance(v, np.ndarray) and (v > v_lim).any():
+        print("The necessary currents overstep the given limit!")
     return v
 
-def powcalc(phase: np.ndarray | float, a:float, b:float)->np.ndarray |float:
+def powcalc(phase: np.ndarray | float, a:float, b:float=0)->np.ndarray |float:
     """
     Function to compute power from given phase.
     It's simply the rearranged form of the fitted linear function.
@@ -183,8 +185,8 @@ def phase_to_voltage(path: str, ps: float | np.ndarray,
     sett = PhaseControl(path=path)
     
     if(any(sett.errors > 1e-2)):
-        print("The error on the fitted function parameters:\n" \
-                "a = {:.4f}\tb = {:.4f}".format(*sett.errors))
+        print("The error on the fitted function parameter:\n" \
+                "a = {:.4f}".format(*sett.errors))
     
     resistance = rescalc(wire_resistivity, wire_length, wire_cross_section)
 
@@ -192,10 +194,38 @@ def phase_to_voltage(path: str, ps: float | np.ndarray,
     voltage = voltcalc(power, resistance, voltage_limit)
     current = currcalc(voltage, resistance, current_limit)
 
-    if voltage==0 or current==0:
-        print("The voltage or current exceeds the given limits!")
+    # if voltage==0 or current==0:
+    #     print("The voltage or current exceeds the given limits!")
     # else:
-    print("Voltage:\t{:.4f} [V]\nCurrent:\t{:.4f} [mA]\nPower:\t\t{:.4f} [W]".format(
-        voltage, current, power))
+    # print("Voltage:\t{:.4f} [V]\nCurrent:\t{:.4f} [mA]\nPower:\t\t{:.4f} [W]".format(
+    #     voltage, current, power))
+    print(power)
 
-    return float(power)
+    return voltage
+
+def voltage_map(v: float | np.ndarray, positions: list[tuple] | tuple):
+    """
+    This function merges the positions of the phase shifters from the
+    sMZI.py file with the voltages converted from phases into a dictionary.
+    
+    ---
+    
+    Args:
+        v (float | array): the voltages in [`V`]
+        positions (list[tuple] | tuple): the positions of the phase shifters
+        
+    Note:
+        The ordering of the positions given here must agree with the
+        dictionary returned by `class Interferometer` when called
+        `phase_map` from the sMZI.py file that was used for the
+        `phase_to_voltage` function.
+    
+    Returns:
+        Dictionary with the positions and corresponding voltages.
+    """
+    volt_map = {}
+    idx=0
+    for pos in positions:
+        volt_map[pos] = v[idx]
+        idx += 1
+    return volt_map

@@ -141,6 +141,7 @@ class Interferometer:
         self.output_phases: np.ndarray[Externalphaseshifter] = np.array([], dtype=Externalphaseshifter)
         self.circuit: np.ndarray[float] = np.zeros(shape=(num_of_modes,num_of_modes), dtype=float)
         self.mzi_list: dict = {}
+        self.phase_map: dict = {}
         
     def PS(self, phases: list[float] | np.ndarray[float]) -> np.ndarray[complex]:
         """
@@ -307,6 +308,39 @@ class Interferometer:
         total_list = np.append(total_list, self.waveguide_filler(self.output_phases))
         
         return total_list
+
+    def ps_prep(self):
+        """
+        This function rewrapes phases following the rules below.
+        
+        >>``phi = phi % 2pi`` if ``phi > 2pi`` or ``phi < 0``
+        
+        >>``phi = 0`` if ``phi = 2pi``
+        
+        ---
+        
+        Returns:
+            All the phases and their coordinates as a tuple defined
+            in the dictionary's keys.
+        """
+        # first prepare the main phases
+        new_circ = np.array([[elem % (2*np.pi) if (elem<0 or elem>2*np.pi) else 0 if elem == 2*np.pi else elem for elem in row] for row in self.circuit])
+        # prepare a dictionary with new phases
+        # keys are coordinates:
+        # (waveguide mode, position from left(input) to right(output))
+        # values are the rewrapped phases
+        all_phase = {}
+        for mode in range(len(new_circ)):   # row in the matrix
+            for phase in range(1,len(new_circ)+1):
+                all_phase[(mode, phase)] = new_circ[mode,phase-1]
+
+        for ps in self.input_phases:
+            all_phase[(ps.mode, 0)] = ps.phi % (2*np.pi) if (ps.phi<0 or ps.phi>2*np.pi) else 0 if (ps.phi== 2*np.pi) else ps.phi
+            
+        for ps in self.output_phases:
+            all_phase[(ps.mode, len(new_circ)+1)] = ps.phi
+        
+        return all_phase
 
     def curve(self, x1: float, x2: float, mode: bool, flip: bool = False,
             res: int = 10, scale: float = 0.5, c: float = 0) -> tuple[np.ndarray[float], np.ndarray[float]]:
@@ -1254,6 +1288,7 @@ def square_decomposition(U: np.ndarray[float | complex]) -> Interferometer:
 
     Itf.circuit = Itf.circuit.T
     Itf.mzi_list = dict(sorted(Itf.mzi_list.items()))
+    Itf.phase_map = Itf.ps_prep()
     
     return Itf
 
