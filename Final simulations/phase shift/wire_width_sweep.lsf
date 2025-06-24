@@ -1,0 +1,28 @@
+# this script sweeps different top cladding heights
+switchtolayout;
+
+wire_widths = [2,10,20,30,40]*1e-6; #um
+wire_length = 100e-6; #um
+
+folder_name = "wire_width_sweep_results/";
+
+for(w=1:length(wire_widths)){
+    switchtolayout;
+    select("geometry::wire");
+    set("y span", wire_widths(w));
+    
+    select("HEAT");
+    set("mesh lock", false);
+    mesh;
+    set("mesh lock", true);
+    set("norm length", wire_length);
+    
+    # start simulation
+    runsweep("power sweep");    # includes predefined powers
+    T=getsweepresult("power sweep","T");
+    matlabsave(folder_name+"T3_w_"+
+        replacestring(num2str(wire_widths(w)*1e6),".","_")+".mat",T);
+}
+
+
+

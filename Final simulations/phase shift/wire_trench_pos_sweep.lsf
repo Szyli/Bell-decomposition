@@ -1,0 +1,40 @@
+switchtolayout;
+
+dist = [2,4,6,8,10]*1e-6;
+
+#folder_name = "wire_trench_pos_results/wider/";
+folder_name = "future_tests/ww_2/";
+
+select("geometry::trench_pos");
+orig_pos = get("y");
+trench_w = get("y span");
+
+select("geometry::wire");
+wire_edge = get("y span");
+
+disloc = wire_edge/2 + trench_w/2;
+
+for(y=1:length(dist)){
+    switchtolayout;
+    
+    select("geometry::trench_pos");
+    set("y",disloc+dist(y));
+    select("geometry::trench_neg");
+    set("y",-disloc-dist(y));
+    
+    select("HEAT");
+    set("mesh lock", false);
+    mesh;
+    set("mesh lock", true);
+    
+    # start simulation
+    runsweep("power sweep");    # includes predefined powers
+    T=getsweepresult("power sweep","T");
+    matlabsave(folder_name+"T3_trench_pos_"+
+        replacestring(num2str(dist(y)*1e6),".","_")+".mat",T);
+}
+switchtolayout;
+select("geometry::trench_pos");
+set("y",orig_pos);
+select("geometry::trench_neg");
+set("y",-orig_pos);

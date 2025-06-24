@@ -1,0 +1,48 @@
+switchtolayout;
+
+y_tol = 1e-6;   # tolerance in y \pm 1 um
+N = 2;  # number of points between original pos and maximum error to simulate
+
+wire_width = 2*1e-6; #um
+wire_length = 100e-6; #um
+
+select("geometry::wire");
+orig_pos = get("y");
+set("y span", wire_width);
+
+folder_name = "wire_pos_tol_results/";
+
+# sweep in original position
+select("HEAT");
+set("mesh lock", false);
+mesh;
+set("mesh lock", true);
+set("norm length", wire_length);
+
+# start simulation
+runsweep("power sweep");    # includes predefined powers
+T=getsweepresult("power sweep","T");
+matlabsave(folder_name+"T3_pos_0.mat",T);
+
+for(pos=1:N){
+    switchtolayout;
+    disloc = y_tol/pos;
+    select("geometry::wire");
+    set("y", orig_pos + disloc);
+    
+    select("HEAT");
+    set("mesh lock", false);
+    mesh;
+    set("mesh lock", true);
+    set("norm length", wire_length);
+    
+    # start simulation
+    runsweep("power sweep");    # includes predefined powers
+    T=getsweepresult("power sweep","T");
+    matlabsave(folder_name+"T3_pos_"+
+        replacestring(num2str(disloc *1e6),".","_")+".mat",T);
+}
+
+switchtolayout;
+select("geometry::wire");
+set("y", orig_pos);
