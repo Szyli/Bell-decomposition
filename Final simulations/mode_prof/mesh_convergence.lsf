@@ -1,0 +1,20 @@
+
+steps = [0.1, 0.05, 0.01, 0.005];
+neff = matrix(length(steps));
+
+for(i=1:length(steps)){
+    switchtolayout;
+    
+    #select("mesh");
+    #set("override y mesh", steps(i));
+    #set("override z mesh", steps(i));
+    select("FDE");
+    set("dy",steps(i)*1e-6);
+    set("dz",steps(i)*1e-6);
+    
+    
+    findmodes;
+    neff(i) = real(getdata('mode1','neff'));   
+}
+
+plot(steps, neff);

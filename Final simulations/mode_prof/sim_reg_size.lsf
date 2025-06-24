@@ -1,0 +1,48 @@
+select("FDE");
+base_z = get("z span");
+base_y = get("y span");
+
+dz = [8, 7, 6, 5]*1e-6;
+dy = [8, 7, 6, 5]*1e-6;
+Nz = length(dz);
+Ny = length(dy);
+# Nz number of rows and Ny number of cols
+neff = matrix(Nz, Ny);
+loss = matrix(Nz, Ny);
+gp = matrix(Nz, Ny);    # group index
+leg = cell(Nz);
+
+for(z=1:Nz){
+    for(y=1:Ny){
+        switchtolayout;
+    
+        select("FDE");
+        set("z span", dz(z));
+        set("y span", dy(y));
+        
+        findmodes;
+        neff(z,y) = real(getdata('mode1','neff'));
+        loss(z,y) = real(getdata("mode1","loss"));
+        loss(z,y) = loss(z,y)/100;
+        gp(z,y) = real(getdata("mode1","ng"));
+        
+    }
+    
+    plot(dy*1e6, neff(z,:),"y span [um]", "neff");
+    holdon;
+    leg{z} = "z span: " + num2str(dz(z)*1e6)+" [um]";
+}
+
+legend(leg);
+
+write("sim_reg/group_idx.txt", num2str(gp), "overwrite");
+write("sim_reg/neff.txt", num2str(neff), "overwrite");
+write("sim_reg/losses.txt", num2str(loss), "overwrite");
+write("sim_reg/y_span.txt", num2str(dy), "overwrite");
+write("sim_reg/z_span.txt", num2str(dz), "overwrite");
+
+# reset
+switchtolayout;
+select("FDE");
+set("z span", base_z);
+set("y span", base_y);
