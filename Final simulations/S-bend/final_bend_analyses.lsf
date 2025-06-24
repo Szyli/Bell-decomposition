@@ -1,0 +1,55 @@
+wavelength_index = 1;  # First wavelength point
+component = 1;         # 1=Ex, 2=Ey, 3=Ez
+
+
+pic = getresult("output monitor","E");
+#out_pic = getresult("monitor","E");
+#H = getresult("monitor","H");
+#out_pic.addattribute("H",H.H);
+#in_pic = getresult("source","mode profile");
+
+# save monitor data as dcard for overlap calculations
+#savedcard("out_pic", "::model::output monitor");
+
+
+# exporting S-bend propagation from big monitor
+
+## Select specific wavelength and component (adjust as needed)
+#wavelength_index = 1;  # First wavelength point
+#component = 1;         # 1=Ex, 2=Ey, 3=Ez
+
+
+## Get 2D slice of the data
+#E_2D = pinch(pic.E,4,component);    # Remove component dimension
+#E_2D = pinch(E_2D,3,wavelength_index); # Remove wavelength dimension
+
+#name=pwd;    # gives location of simulation file;
+#name = name + "/propagation_field_data/";
+
+## Export each component to separate files
+#write(name+"Ex.txt", num2str(abs(pinch(E_2D,3,1))),"overwrite");  # Ex component
+#write(name+"Ey.txt", num2str(abs(pinch(E_2D,3,2))),"overwrite");  # Ey component
+#write(name+"Ez.txt", num2str(abs(pinch(E_2D,3,3))),"overwrite");  # Ez component
+
+## Export coordinates (assuming they match E_2D dimensions)
+#write(name+"x_coords.txt", num2str(pic.x),"overwrite");
+#write(name+"y_coords.txt", num2str(pic.y),"overwrite");
+
+
+
+# exporting mode profile from cross section monitor
+name = "mode_comp_raw_data/straight_";
+#name = "mode_comp_raw_data/out_Sbend_";
+
+# Get 2D slice of the data
+E_2D = pinch(pic.E,1,component);    # Remove component dimension
+E_2D = pinch(E_2D,3,wavelength_index); # Remove wavelength dimension
+
+# Export each component to separate files
+write(name+"Ex.txt", num2str(abs(pinch(E_2D,3,1))),"overwrite");  # Ex component
+write(name+"Ey.txt", num2str(abs(pinch(E_2D,3,2))),"overwrite");  # Ey component
+write(name+"Ez.txt", num2str(abs(pinch(E_2D,3,3))),"overwrite");  # Ez component
+
+# Export coordinates (assuming they match E_2D dimensions)
+write(name+"z_coords.txt", num2str(pic.z),"overwrite");
+write(name+"y_coords.txt", num2str(pic.y),"overwrite");
