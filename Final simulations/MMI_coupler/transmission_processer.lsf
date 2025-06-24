@@ -1,0 +1,76 @@
+clear;
+
+#T_in_1 = getresult("monitor_in_1", "T");
+#T_in_1 = T_in_1.T;
+
+#T_in_2 = getresult("monitor_in_2", "T");
+#T_in_2 = T_in_2.T;
+
+T_out_1 = getresult("monitor output bar", "T");
+lambda = T_out_1.lambda * 1e6;   # wavelength in um
+T_out_1 = T_out_1.T;
+
+T_out_2 = getresult("monitor output cross", "T");
+T_out_2 = T_out_2.T;
+        
+# total transmission in percentage = loss [%]
+#T_diff = abs((T_in_1 + T_in_2) - (T_out_1 + T_out_2))*100;
+
+#print("\nTotal loss in percentages:\t"+num2str(T_diff)+" %\n");
+
+#plot(lambda, T_in_1,
+     #"lambda [um]", "T", "Transmission ratios of MMI cell",
+     #"marker style=o, color=blue");
+#holdon;
+#plot(lambda, T_in_2,
+     #"lambda [um]", "T", "Transmission ratios of MMI cell",
+     #"marker style=x, color=blue");
+holdon;
+plot(lambda, T_out_1,
+     "lambda [um]", "T", "Transmission ratios of MMI cell",
+     "marker style=o, color=red");
+holdon;
+plot(lambda, T_out_2,
+     "lambda [um]", "T", "Transmission ratios of MMI cell",
+     "marker style=x, color=red");
+
+legend(
+    "cross mode output",
+    "bar mode output");
+  
+holdoff;
+
+xres = 600;
+yres = 600;
+
+name=splitstring(currentfilename,".");    # gives location of simulation file
+
+# save figure
+selectfigure(1);
+exportfigure(name{1}+"_transmissions.png", xres, yres);
+
+# save total loss
+#write(name{1}+"_Total_loss.txt","Total loss [%]\n"+num2str(T_diff), "overwrite");
+
+
+pic = getresult("monitor","E");
+
+# Select specific wavelength and component (adjust as needed)
+wavelength_index = 1;  # First wavelength point
+component = 1;         # 1=Ex, 2=Ey, 3=Ez
+
+# Get 2D slice of the data
+E_2D = pinch(pic.E,4,component);    # Remove component dimension
+E_2D = pinch(E_2D,3,wavelength_index); # Remove wavelength dimension
+
+# Export each component to separate files
+write(name{1}+"_Ex.txt", num2str(abs(pinch(E_2D,3,1))),"overwrite");  # Ex component
+write(name{1}+"_Ey.txt", num2str(abs(pinch(E_2D,3,2))),"overwrite");  # Ey component
+write(name{1}+"_Ez.txt", num2str(abs(pinch(E_2D,3,3))),"overwrite");  # Ez component
+
+# Export coordinates (assuming they match E_2D dimensions)
+write(name{1}+"_x_coords.txt", num2str(pic.x),"overwrite");
+write(name{1}+"_y_coords.txt", num2str(pic.y),"overwrite");
+
+
+

@@ -1,0 +1,277 @@
+#clear;
+cleardcard;
+switchtolayout;
+
+xres = 1200;
+yres = 600;
+
+# functions require lengths in [um] and they return in [um] !!!!
+# exeptions are the functions adjusting the system as they don't return anything
+# and convert the data to correct unit
+
+function Gradient(tpr_width, wg_width, tpr_length){
+    # function to compute the gradient of the linear taper
+    
+    return (tpr_width - wg_width)/tpr_length;
+}
+
+function WidthCalc(tpr_width, wg_width, tpr_length, dl){
+    # function that calculates the width difference at distance dl
+    
+    dw = (tpr_width - wg_width)/tpr_length;
+    
+    return dw * dl;
+}
+
+function AdjustGeometries(tpr_name1, tpr_name2, tpr_len, xmin,
+                          mmi_name1, mmi_name2, mmi_len){
+    # function to adjust geometries
+    tpr_len = tpr_len*1e-6;
+    xmin = xmin*1e-6;
+    mmi_len = mmi_len*1e-6;
+    
+    # adjust input lenghts
+    select(tpr_name1);
+    set("len", tpr_len);
+    set("x", xmin + tpr_len/2);
+    
+    select(tpr_name2);
+    set("len", tpr_len);
+    set("x", xmin + tpr_len/2);
+    
+    # adjust MMI position
+    select(mmi_name1);
+    set("poles", [xmin + tpr_len, 0;
+                  xmin + tpr_len + mmi_len, 0]);
+    
+    select(mmi_name2);
+    set("poles", [xmin + tpr_len, 0;
+                  xmin + tpr_len + mmi_len, 0]);
+                  
+    return 0;
+}
+
+function AdjustSolver(solver_name, x, y, yspan, ntrial, n_eff){
+    # function to adjust solver
+    
+    select(solver_name);
+    set("x", x*1e-6);
+    set("y", y*1e-6);
+    set("y span", yspan*1e-6);
+    
+    set("z", 0.1375*1e-6);
+    set("z span", 6*1e-6);
+    
+    set("automatically remove pml modes", 1);
+    set("number of trial modes", ntrial);
+    
+    set("search","near n");
+    set("use max index",0);    
+    set("n",n_eff);
+    
+    
+    return 0;
+}
+
+
+# ----------------------
+# params
+
+top_tpr_name = "mode_2::upper layer 2::taper in mode_2 upper layer";
+bot_tpr_name = "mode_2::lower layer 2::taper in mode_2 lower layer";
+top_mmi_name = "MMI upper layer::MMI upper layer";
+bot_mmi_name = "MMI lower layer::MMI lower layer";
+
+
+select("mode_2::upper layer 2::straight connector in mode_2 upper layer");
+ywg = get("poles");
+ywg = ywg(1,2)*1e6;         # center of wg; um
+
+select(bot_mmi_name);
+mmilength = get("poles");
+mmilength = (mmilength(2,1)-mmilength(1,1))*1e6;    # length of the mmi region; um
+
+FDE_yspan = 5.88;  # how wide the simulation is
+MESH_yspan = 1; # how much wider the mesh is over the geometry of the region; um
+
+ymmi = get("base width");
+ymmi = ymmi*1e6;     # width for mmi eigensolver; um
+
+
+# ----------------------
+# initial calculations
+# ----------------------
+
+AdjustGeometries(top_tpr_name, bot_tpr_name, l_tpr(1), xstart,
+                 top_mmi_name, bot_mmi_name, mmilength);
+
+AdjustSolver("FDE", xstart, ywg, FDE_yspan, 1, 1.53);
+
+# Find the fundamental single mode we work with (only supported mode in the wg)
+run;
+findmodes;
+
+Dname_prev = {"input mode"};
+copydcard("mode1", Dname_prev{1});
+
+pow = matrix(1, 1); # matrix that stores the previous modes' power
+pow(1) = 1;         # input power; whatever it is in a big system you can consider it here normalized...
+switchtolayout;
+
+# Find all supported modes in the MMI; constant throughout the length sweep
+AdjustSolver("FDE", xstart+l_tpr(1)+1.01, 0, ymmi+FDE_yspan, 30, 1.6);
+run;
+n_mmi_modes = findmodes;
+if(n_mmi_modes==30){
+    switchtolayout;
+    AdjustSolver("FDE", xstart+l_tpr(1)+1.01, 0, ymmi+FDE_yspan, 40, 1.6);
+    run;
+    n_mmi_modes = findmodes;
+    print("Total MMI modes found: "+num2str(n_mmi_modes)+" out of 40.\n");
+}else{print("Total MMI modes found: "+num2str(n_mmi_modes)+" out of 30.\n");}
+
+
+for(m=1:n_mmi_modes){
+    copydcard("mode"+num2str(m), "mmi_"+num2str(m));
+}
+
+trial_modes = round(n_mmi_modes/2);
+switchtolayout;
+
+
+# ----------------------
+# iterations
+# ----------------------
+
+loss = matrix(length(N),1);
+loss_p = matrix(length(N),1);
+
+
+print("taper length: "+num2str(l_tpr(1))+" um\n");
+
+start_time = now;
+
+for(i=1:length(N)){         # iteration through different taper lengths
+    
+    iter_start_time = now;
+    print("Number of points: "+num2str(N(i))+"\n");
+    
+    # adjust system
+    AdjustGeometries(top_tpr_name, bot_tpr_name, l_tpr(1), xstart,
+                     top_mmi_name, bot_mmi_name, mmilength);
+    
+    dw = Gradient(top_tpr_w, w_wg, l_tpr(1));
+    solver_width = FDE_yspan + dw*l_tpr(1);    # um
+                  
+    steps = linspace(l_tpr(1)/N(i), l_tpr(1)-0.01, N(i));
+    
+    for(j=1:length(steps)){         # iteration through geometry
+        
+        solver_xpos = xstart + steps(j);
+
+        # taper
+        AdjustSolver("FDE", solver_xpos,
+                     ywg, solver_width, 10, 1.53);
+        run;
+        
+        n_modes = findmodes;
+        tpr_res = matrix(n_modes, length(Dname_prev));
+        
+        for(p=1:length(Dname_prev)){        # iteration through previous modes
+            for(m=1:n_modes){               # iteration through new modes
+                
+                res = overlap("mode"+num2str(m), Dname_prev{p});
+                tpr_res(m,p) = res(2);  # saving the power coupling
+            }
+            # weighting the power coupling efficiencies by the power of the input mode
+            tpr_res(:,p) = tpr_res(:,p) * pow(p);
+            # delete the used modes' dcard from deck to save memory
+            if(j!=1){   # to not delete input mode
+                cleardcard(Dname_prev{p});
+            }
+        }
+
+        tpr_sum_pcoup = sum(tpr_res);
+        #print("Power coupling at "+num2str((solver_xpos - xstart)*1e6)+" um is "+num2str(tpr_sum_pcoup*100)+" %");
+        
+        # update previous mode list and power carried by the new modes
+        Dnames = cell(1);
+        Dnames.clear;
+        
+        pow = matrix(n_modes, 1);
+        for(m=1:n_modes){
+            # put tolerance level here if you want
+            Dnames.append("l_"+num2str(i)+"-s_"+num2str(j)+"-m_"+num2str(m));
+            copydcard("mode"+num2str(m), Dnames{length(Dnames)});
+            pow(m) = sum(tpr_res(m, :));
+        }
+        Dname_prev = Dnames;
+        switchtolayout;
+    }
+    # MMI
+    mmi_res = matrix(n_mmi_modes, length(Dname_prev));
+        
+    # find best overlap with taper output modes
+    for(p=1:length(Dname_prev)){
+        for(m=1:n_mmi_modes){   # calculate with already stored MMI modes
+            
+            res = overlap("mmi_"+num2str(m), Dname_prev{p});
+            mmi_res(m,p) = res(2);  # saving the power coupling
+        }
+        mmi_res(:,p) = mmi_res(:,p) * pow(p);
+        cleardcard(Dname_prev{p});
+    }
+    sum_pcoup = sum(mmi_res);
+    print("Power coupling to MMI is "+num2str(sum_pcoup*100)+" %");
+            
+    if((1-sum_pcoup)*100 > 0.01){
+        print("~~ Mode mismatch loss is higher than desired 0.01% ~~");
+        print("at taper length: "+num2str(l_tpr(1))+" [um]\n");
+    }
+    
+    Dname_prev = {"input mode"};
+    pow = matrix(1, 1);
+    pow(1) = 1;
+    
+    loss(i,1) = -10*log10(sum_pcoup);
+    loss_p(i,1) = (1-sum_pcoup)*100;
+    
+    print("taper to MMI mode mismatch loss: "+num2str(
+                loss(i,1))+" [dB]");
+    print("Which equals to: "+num2str(loss_p(i,1))+" %");
+    print("");
+    
+    end_time = (now-start_time)/1e3;
+    print("\nIteration duration [s]:" + num2str((now-iter_start_time)/1e3) + "\n");
+
+}
+end_time = (now-start_time)/1e3;
+print("\nComplete simulation duration [s]:" + num2str(end_time) + "\n");
+
+plot(N, loss,
+        "N", "loss [dB]",
+        "mode mismatch losses of taper-MMI interface for different number of points");
+
+legend("w="+num2str(top_tpr_w)+" um");
+
+fl = matrix(length(loss), 2);
+fl(:,1) = N;
+fl(:,2) = loss;
+
+# extracting data
+savedata(file_name+name, fl);
+write(file_name+name+".txt", num2str(fl),"overwrite");
+
+plot(N, loss_p,
+        "N", "loss [%]",
+        "mode mismatch losses of taper-MMI interface for different number of points");
+
+legend("w="+num2str(top_tpr_w)+" um");
+
+
+selectfigure(1);
+exportfigure(plt_name+name+".png", xres, yres);
+selectfigure(2);
+exportfigure(plt_name+name+".png", xres, yres);
+
+
