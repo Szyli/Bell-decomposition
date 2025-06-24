@@ -1,0 +1,5 @@
+#mesh;
+runsweep("power sweep");
+T=getsweepresult("power sweep","T");
+#matlabsave("T3.mat",T);
+matlabsave("proposition/T_w4.mat",T);

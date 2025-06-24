@@ -1,0 +1,55 @@
+clear;
+
+L = 200e-6; # length of the wire
+lambda = 1.55e-6; # wavelength
+# total power in Watts
+# Including zero to show the common ground
+power = [0, 0.05, 0.1, 0.15, 0.2, 0.25];
+neff = matrix(length(power));
+
+#T_name = "T3";
+T_name = "proposition/T_w4";
+# import T map
+select('temperature');
+importdataset(T_name+".mat");
+
+switchtolayout;
+# find neff with no heating
+setnamed('temperature','enabled',0);
+setanalysis('wavelength',lambda);
+findmodes;
+neff0 = real(getdata('mode1','neff'));
+loss0 = real(getdata('mode1','loss'));
+neff(1) = neff0;
+
+for (i=2:length(power)){
+    switchtolayout;
+    setnamed('temperature','enabled',1);
+    setnamed('temperature','P_index',i-1);
+    findmodes;
+    neff(i) = real(getdata('mode1','neff'));
+}
+
+phase = 2*pi*(neff-neff0)*L/lambda;
+# PS plot
+plot(power, phase, 'Power (W)','Phase shift','Phase-power relationship',
+    "color=blue");
+holdon;
+plot(power, phase, "Power (W)", "Phase shift", "Phase-power relationship",
+    "marker style=x, plot points, color=blue");
+holdon;
+Vpi = matrix(1,length(power)); # array of zeros
+Vpi = Vpi+pi;
+plot(power, Vpi);
+holdon;
+plot(power, 2*Vpi);
+holdoff;
+legend("","Simulation",
+       "Pi shift","2Pi shift");
+       
+# save results
+results = matrix(length(power),2);
+results(:,1) = power;
+results(:,2) = phase;
+write("proposition/power_phase_points_w4.txt",num2str(results), "overwrite");
+

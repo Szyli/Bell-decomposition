@@ -1,0 +1,39 @@
+# this script sweeps different top cladding heights
+switchtolayout;
+folder_name = "bot_clad/ww_2/";
+clad_heights = [3,6,8,10]*1e-6; #um
+
+z_sim_spam = 8e-6;    # the length the simulation region penetrates the base into
+
+select("geometry::cladding::bot clad");
+z_ref = get("z");
+select("geometry::cladding::bot clad::cladding_0");
+z_max = get("z max");
+
+select("geometry::base");
+z_base_top = get("z max");
+
+for(i=1:length(clad_heights)){
+    switchtolayout;
+    
+    select("geometry::cladding::bot clad::cladding_0");
+    z_min = z_max - clad_heights(i);
+    set("z min", z_min);
+    
+    select("geometry::base");
+    set("z max", z_ref + z_min);
+    
+    select("HEAT simulation region");
+    set("z min", z_ref + z_min - z_sim_spam);
+    
+    select("HEAT");
+    set("mesh lock", false);
+    mesh;
+    set("mesh lock", true);
+    
+    runsweep("power sweep");    # includes predefined powers
+    T=getsweepresult("power sweep","T");
+    matlabsave(folder_name+"T_"+replacestring(num2str(clad_heights(i)*1e6),".","_")+".mat",T);
+    
+}
+
