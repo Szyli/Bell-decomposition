@@ -1,0 +1,21 @@
+# this prompt exports the given number of cross seectional monitors transmission data
+
+source = "monitors_g1/";
+name_tag = "monitor_output_";
+
+N = 8;
+
+for(i=1:N){
+    T_bar = getresult(name_tag+"bar_"+num2str(i),"T");
+    T_cross = getresult(name_tag+"cross_"+num2str(i),"T");
+    
+    x_pos = getresult(name_tag+"cross_"+num2str(i),"x");
+    
+    tmp = matrix(2,2);
+    tmp(1,1) = x_pos;
+    tmp(2,1) = x_pos;
+    tmp(1,2) = T_bar.T;
+    tmp(2,2) = T_cross.T;
+    
+    write(source+"T_"+num2str(i)+".txt",num2str(tmp),"overwrite");
+}
