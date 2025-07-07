@@ -31,7 +31,7 @@ See the implementation of the latter [here](https://github.com/clementsw/interfe
 
 <p align="center">
 <figure>
-  <img src="https://github.com/user-attachments/assets/c51848a4-1777-4559-b4ba-722c3bedf4a3" alt="Bell's circuit representing a 4x4 identity operation.", style="width:100%; height:80%"; border:0">
+  <img src="https://github.com/user-attachments/assets/5ec65291-f004-475f-b866-954df08a3bd0" alt="Bell's circuit representing a 4x4 identity operation.", style="width:100%; height:80%"; border:0">
   <figcaption><p align="center"><i> Bell's circuit representing a 4x4 identity operation. </i></p></figcaption>
 </figure>
 </p>
