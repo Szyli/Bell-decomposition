@@ -15,7 +15,7 @@ The main language of the work is python with jupyter notebooks for testbenches (
 > For the usage of these codes Ansys Lumerical subscription is required.
 
 There are different still active branches.
-  - The [**main**](https://github.com/Szyli/Bell-decomposition) which, as the name suggest, should contain the best version of the project.
+  - The [**main**](https://github.com/Szyli/Bell-decomposition) which, as the name suggest, should contain the best version of the project
   - The [**office**](https://github.com/Szyli/Bell-decomposition/tree/office) which corresponds to the developments carried out on the computer running the Ansys simulations
   - The [**office-card**](https://github.com/Szyli/Bell-decomposition/tree/office-card) which corresponds to the developments carried out on the computer connected to the voltage controller card
   - The [**Sophia**](https://github.com/Szyli/Bell-decomposition/tree/Sophia) branch is outdated (changes were implemented/merged to **main**) and corresponded to the developments carried out by a temporary colleague
@@ -39,7 +39,7 @@ See the implementation of the latter [here](https://github.com/clementsw/interfe
 Given a unitary matrix (``numpy array``) it prepares the order and value of the phase shifts in the circuit such that it will represent the operator. The ``matplotlib`` drawing of the circuit is available similarly to Clement's implementation. There is also an initialised functionality to build the full logical circuit defining and connecting its building blocks in Ansys INTERCONNECT. Once we obtain the optical properties of said elements we could simulate the performance of the circuit using test unitaries. Therefore, the next step was the design and optimisation of these building blocks.
 
 # Design & optimisation
-The building blocks of the integrated photonic circuit, considered in this work, for the implementation of unitary operations is the following.
+The building blocks of the integrated photonic circuit, considered in this work, for the implementation of unitary operations are the following.
   - Straight waveguide
   - Bent waveguide (*S-bend*)
   - 50:50 beamsplitter (*3dB coupler*)
